@@ -144,6 +144,28 @@ Two toolchain traps on this machine:
 `local.properties` and the copied web assets, so only the ~50 source files are
 tracked.
 
+### Verifying that a change actually reached the device
+
+Three failure modes here look identical from the UI — the change simply has no
+effect — and each cost a debugging cycle:
+
+- **A failed build leaves the previous `dist/` in place.** Filtering the build
+  output for `ERROR` is not enough; check the exit code. `nx build` returning 1
+  while the pipeline carries on packaging the old bundle is silent.
+- **`npx cap sync` copies without cleaning.** Orphan chunks from earlier syncs
+  stay in `android/app/src/main/assets/public`, so grepping that directory for a
+  new rule gives a false positive — the chunk is there but `index.html` does not
+  reference it. Compare against `dist/`, or `rm -rf` the assets directory first.
+- **The service worker used to serve a stale bundle**, which is why it is now
+  disabled in the shell.
+
+The reliable check is inside the WebView: read back what the app actually
+loaded, e.g. `document.getElementById('tv-focus-styles').textContent`.
+
+**The stylesheet is a JS template literal.** Backticks inside its comments end
+the string and produce a wall of unrelated type errors far from the real cause.
+Escape them.
+
 ### Baseline before any navigation work
 
 Measured on the reference device with the first APK from this branch: pressing

@@ -149,8 +149,17 @@ const TV_FOCUS_CSS = `
     max-width: none !important;
 }
 
-[data-tv-nav][${REGION_ATTRIBUTE}="rail"] aside.app-rail nav {
+/*
+ * Widening the <nav> groups is not enough on its own: the lower two live inside
+ * a \`.rail-context-region\` wrapper that carries its own narrow width, so they
+ * kept their icon-sized column and truncated their labels while the top group
+ * expanded normally.
+ */
+[data-tv-nav][${REGION_ATTRIBUTE}="rail"] aside.app-rail nav,
+[data-tv-nav][${REGION_ATTRIBUTE}="rail"] aside.app-rail div.rail-context-region {
     width: 100% !important;
+    max-width: none !important;
+    align-items: stretch !important;
 }
 
 [data-tv-nav][${REGION_ATTRIBUTE}="rail"] aside.app-rail a[aria-label],
