@@ -1078,3 +1078,9 @@ No formal migration system yet. Schema changes are applied via raw SQL in the `c
 - The `nx-generate` skill handles generator discovery internally - don't call nx_docs just to look up generator syntax
 
 <!-- nx configuration end-->
+
+## Android TV Port (fork-only)
+
+This fork carries an Android TV port on the `androidtv/tvm-ui` branch. Its branch
+model, conflict-surface rules, target hardware and open decisions live in
+[`CLAUDE.android.md`](./CLAUDE.android.md) — read it before touching port code.
