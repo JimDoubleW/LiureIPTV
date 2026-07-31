@@ -20,6 +20,7 @@ import {
     promoteVirtualFocus,
     setVirtualFocus,
 } from './virtual-focus';
+import { scrollToReveal } from './scroll-reach';
 import { findBestCandidate, type TvDirection } from './spatial-geometry';
 import { installTvFocusStyles } from './tv-focus.styles';
 
@@ -160,6 +161,23 @@ function move(direction: TvDirection): boolean {
     );
 
     if (!target) {
+        // Nothing in range does not mean nothing exists: candidate collection
+        // is bounded to the viewport, so anything below the fold — the play
+        // button on a movie detail, for one — is invisible to the search. Scroll
+        // that way and look again, otherwise such content can never be focused
+        // and therefore never scrolled to.
+        if (scrollToReveal(origin, direction)) {
+            const revealed = findBestCandidate(
+                origin.getBoundingClientRect(),
+                collectCandidates().filter((c) => c.target !== origin),
+                direction
+            );
+            if (revealed) {
+                applyFocus(revealed);
+                return true;
+            }
+        }
+
         // Deliberately do not wrap around: on a TV the user cannot see where
         // focus went, and wrapping reads as focus vanishing.
         return false;

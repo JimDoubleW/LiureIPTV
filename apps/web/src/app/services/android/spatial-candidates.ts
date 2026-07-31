@@ -26,8 +26,16 @@ const NATIVE_FOCUSABLE =
     'a[href], button, select, textarea, [contenteditable="true"],' +
     ' input:not([type="hidden"]), [tabindex]:not([tabindex="-1"])';
 
-/** Elements nearly off-screen still count, so focus can pull the list along. */
-const VIEWPORT_MARGIN_PX = 120;
+/**
+ * How far beyond the viewport an element still counts as reachable.
+ *
+ * Generous on purpose. A movie detail puts its Play button at y=710 on a 540 px
+ * viewport — 170 px below the fold — and a tight margin made it invisible to
+ * the search, so nothing could focus it and therefore nothing ever scrolled it
+ * into view. Focusing applies `scrollIntoView`, so a candidate just off-screen
+ * is brought in rather than focused blindly.
+ */
+const VIEWPORT_MARGIN_PX = 600;
 
 /**
  * Text entry needs different handling: focusing it opens the Android IME, which
