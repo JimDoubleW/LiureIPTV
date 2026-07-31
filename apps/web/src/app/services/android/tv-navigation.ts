@@ -6,6 +6,12 @@ import {
     isTextEntry,
 } from './spatial-candidates';
 import { resolveZone, ZoneMemory } from './focus-zones';
+import {
+    clearVirtualFocus,
+    getVirtualFocus,
+    promoteVirtualFocus,
+    setVirtualFocus,
+} from './virtual-focus';
 import { findBestCandidate, type TvDirection } from './spatial-geometry';
 import { installTvFocusStyles } from './tv-focus.styles';
 
@@ -30,6 +36,13 @@ const DIRECTION_BY_KEY: Readonly<Record<string, TvDirection>> = {
 const memory = new ZoneMemory();
 
 function currentElement(): HTMLElement | null {
+    // A virtually focused text field is where the user believes focus is, even
+    // though the browser has it on the body.
+    const virtual = getVirtualFocus();
+    if (virtual) {
+        return virtual;
+    }
+
     const active = document.activeElement;
     if (!active || active === document.body || !(active instanceof HTMLElement)) {
         return null;
@@ -39,7 +52,16 @@ function currentElement(): HTMLElement | null {
 
 function applyFocus(element: HTMLElement): void {
     ensureFocusable(element);
-    element.focus({ preventScroll: true });
+
+    // Arriving on a text field must not raise the keyboard — only OK does.
+    // Real focus would open the IME immediately, so the field is marked instead
+    // and DOM focus stays on the body, which keeps the D-pad alive.
+    if (isTextEntry(element)) {
+        setVirtualFocus(element);
+    } else {
+        clearVirtualFocus();
+        element.focus({ preventScroll: true });
+    }
 
     // Panels scroll independently, so the newly focused row is often just
     // outside its own container even though the page did not move.
@@ -108,7 +130,22 @@ function move(direction: TvDirection): boolean {
  */
 function activateFocused(event: KeyboardEvent): void {
     const active = currentElement();
-    if (!active || isNativelyActivatable(active) || isTextEntry(active)) {
+    if (!active) {
+        return;
+    }
+
+    // Granting real focus is what raises the keyboard; no coaxing needed.
+    if (isTextEntry(active) && promoteVirtualFocus()) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+    }
+
+    if (isTextEntry(active)) {
+        return;
+    }
+
+    if (isNativelyActivatable(active)) {
         return;
     }
 
@@ -139,10 +176,15 @@ function onKeyDown(event: KeyboardEvent): void {
         return;
     }
 
-    // Text entry keeps its arrows too: the Android IME is open over it and owns
-    // the remote until the user backs out. Moving focus underneath it would
-    // leave the keyboard editing a field nobody is looking at.
-    if (active && isTextEntry(active)) {
+    // A field holding *real* focus has the keyboard open over it. Left/right
+    // belong to the caret, but up/down must still escape, or the field is a
+    // trap once the user is done typing.
+    if (
+        active &&
+        isTextEntry(active) &&
+        !getVirtualFocus() &&
+        (direction === 'left' || direction === 'right')
+    ) {
         return;
     }
 

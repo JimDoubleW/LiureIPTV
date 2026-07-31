@@ -1,4 +1,5 @@
 import { SELECTED_ATTRIBUTE } from './focus-zones';
+import { VIRTUAL_FOCUS_ATTRIBUTE } from './virtual-focus';
 
 /**
  * The three focus states, measured off the TiviMate benchmark.
@@ -30,36 +31,62 @@ const TV_FOCUS_CSS = `
 }
 
 /*
- * Programmatic focus() does not always satisfy :focus-visible, and every focus
- * move here is programmatic, so this keys off :focus.
+ * Everything below is declared !important, which is deliberate and not
+ * laziness.
+ *
+ * This is an override layer injected at bootstrap, before Angular emits any
+ * component styles. \`[data-tv-nav] :focus\` weighs exactly as much as a class
+ * such as \`.mat-mdc-raised-button\`, so on that tie the cascade decides — and
+ * Material, loading later, wins every time. The first version of this file lost
+ * silently that way: the ring showed because nothing competed for \`outline\`,
+ * while the fill never applied at all.
+ *
+ * Programmatic focus() does not reliably satisfy :focus-visible either, and
+ * every move here is programmatic, so these key off :focus.
+ *
+ * Text fields never take real focus while navigating — that would open the
+ * Android keyboard — so they carry a marker attribute instead and are styled
+ * identically here. See virtual-focus.ts.
  */
-[data-tv-nav] :focus {
-    outline: 3px solid var(--tv-focus-fill);
-    outline-offset: 2px;
-    border-radius: var(--tv-focus-radius);
-    background-color: var(--tv-focus-fill);
-    color: var(--tv-focus-ink);
+[data-tv-nav] :focus,
+[data-tv-nav] [${VIRTUAL_FOCUS_ATTRIBUTE}] {
+    background-color: var(--tv-focus-fill) !important;
+    color: var(--tv-focus-ink) !important;
+    outline: 3px solid var(--tv-focus-fill) !important;
+    outline-offset: 2px !important;
+    border-radius: var(--tv-focus-radius) !important;
 }
 
 /*
- * Descendants normally carry their own colour, so the dark ink has to be
- * pushed down for the filled pill to stay legible. Media keeps its own
- * rendering: a poster must not be repainted.
+ * Descendants carry their own colour, so the dark ink has to be pushed down for
+ * the filled pill to stay legible. Media is left alone: a poster or a channel
+ * logo must not be repainted.
  */
-[data-tv-nav] :focus :not(img):not(video):not(svg):not(svg *) {
-    color: var(--tv-focus-ink);
+[data-tv-nav] :focus *:not(img):not(video):not(svg):not(svg *),
+[data-tv-nav] [${VIRTUAL_FOCUS_ATTRIBUTE}] *:not(img):not(video):not(svg):not(svg *) {
+    color: var(--tv-focus-ink) !important;
 }
 
+/*
+ * Material paints button and list backgrounds on inner ripple layers rather
+ * than on the element itself. Those sit above our fill and would hide it.
+ */
+[data-tv-nav] :focus .mat-mdc-button-persistent-ripple::before,
+[data-tv-nav] :focus .mat-mdc-button-ripple,
+[data-tv-nav] :focus .mdc-button__ripple,
+[data-tv-nav] :focus .mat-mdc-list-item-unscoped-content,
+[data-tv-nav] :focus .mat-ripple {
+    background-color: transparent !important;
+}
+
+/*
+ * The selection each panel keeps while focus is elsewhere. Translucent white so
+ * the lift is computed against whatever that panel's own background happens to
+ * be, which is how the benchmark behaves.
+ */
 [data-tv-nav] [${SELECTED_ATTRIBUTE}]:not(:focus) {
-    background-color: var(--tv-selected-fill);
-    border-radius: var(--tv-focus-radius);
-}
-
-/*
- * The browser's own focus ring would otherwise double up with ours.
- */
-[data-tv-nav] :focus:not(:focus-visible) {
-    outline: 3px solid var(--tv-focus-fill);
+    background-color: var(--tv-selected-fill) !important;
+    border-radius: var(--tv-focus-radius) !important;
 }
 `;
 
