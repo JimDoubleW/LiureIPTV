@@ -6,6 +6,7 @@ import {
     isTextEntry,
 } from './spatial-candidates';
 import { resolveZone, ZoneMemory } from './focus-zones';
+import { applyRegion } from './panel-region';
 import {
     clearVirtualFocus,
     getVirtualFocus,
@@ -68,6 +69,7 @@ function applyFocus(element: HTMLElement): void {
     element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 
     memory.remember(element);
+    applyRegion(element);
 }
 
 /** First focusable thing on screen, used when nothing holds focus yet. */

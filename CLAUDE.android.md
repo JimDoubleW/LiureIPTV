@@ -270,6 +270,29 @@ Still useful:
   UI, and two of them cost a debugging cycle here before the WebView was
   inspected.
 
+## Workspace Landmarks
+
+Verified in the running app, because guessing here cost a debugging cycle:
+
+| Element | x | width (of 960 dp) |
+| --- | --- | --- |
+| `aside.app-rail` (wraps `nav.rail-links`) | 0 | 60 |
+| `header.workspace-header` | 60 | 900 — spans the full content width |
+| `aside.context-panel` | 60 | 322 |
+| `main.workspace-content` | 382 | 578 |
+
+Two traps in that table. **The rail is an `<aside>` too**, so a bare `aside`
+selector collapses the rail along with the category column, and testing
+`closest('aside')` before `closest('nav')` puts rail items in the wrong region.
+And the header spans everything, so an element's x coordinate says nothing about
+which panel it belongs to.
+
+Progressive collapse is driven by `panel-region.ts`, which publishes
+`data-tv-region` on the document element; the stylesheet narrows
+`aside.context-panel` when the region is `content`. It narrows to a strip rather
+than to zero on purpose: a zero-width panel has zero-sized children, candidate
+collection drops them, and left would have nothing to move to.
+
 ## Portal Transport
 
 Portal traffic bypasses the proxy through `PortalDirectInterceptor`

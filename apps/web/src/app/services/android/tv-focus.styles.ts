@@ -1,4 +1,5 @@
 import { SELECTED_ATTRIBUTE } from './focus-zones';
+import { REGION_ATTRIBUTE } from './panel-region';
 import { VIRTUAL_FOCUS_ATTRIBUTE } from './virtual-focus';
 
 /**
@@ -28,6 +29,7 @@ const TV_FOCUS_CSS = `
     --tv-focus-ink: #0a0a0a;
     --tv-selected-fill: rgba(255, 255, 255, 0.1);
     --tv-focus-radius: 8px;
+    --tv-collapsed-panel: 88px;
 }
 
 /*
@@ -87,6 +89,31 @@ const TV_FOCUS_CSS = `
 [data-tv-nav] [${SELECTED_ATTRIBUTE}]:not(:focus) {
     background-color: var(--tv-selected-fill) !important;
     border-radius: var(--tv-focus-radius) !important;
+}
+
+/*
+ * Progressive panel collapse.
+ *
+ * On a 960 dp-wide TV the category column takes a third of the screen and keeps
+ * it even while the user is three panels away. Once focus reaches the content,
+ * the column narrows and the content takes the space back.
+ *
+ * It narrows to a strip rather than to nothing, and that is load-bearing: a
+ * zero-width panel has zero-sized children, candidate collection drops them,
+ * and pressing left would find nothing to move to — focus would be trapped in
+ * the content with no way back.
+ *
+ * The selector names the category column explicitly because the rail is an
+ * \`<aside>\` too: a bare \`aside\` collapsed both, the rail included.
+ */
+[data-tv-nav][${REGION_ATTRIBUTE}="content"] aside.context-panel {
+    max-width: var(--tv-collapsed-panel) !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+}
+
+[data-tv-nav] aside.context-panel {
+    transition: max-width 180ms ease-out !important;
 }
 `;
 
