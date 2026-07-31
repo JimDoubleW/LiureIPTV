@@ -2,8 +2,12 @@ import { bootstrapApplication } from '@angular/platform-browser';
 import { registerAppDateLocales } from './app/app-date-locales';
 import { AppComponent } from './app/app.component';
 import { appConfig } from './app/app.config';
+import { armTvNavigation } from './app/services/android/tv-navigation';
 
 registerAppDateLocales();
+
+// D-pad navigation for the Android TV port; a no-op off the Capacitor shell.
+armTvNavigation();
 
 bootstrapApplication(AppComponent, appConfig)
     .then(() => {

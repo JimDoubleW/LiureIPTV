@@ -50,6 +50,23 @@ describe('runtime config helpers', () => {
         ).toBe(false);
     });
 
+    it('disables service worker inside the Capacitor Android shell', () => {
+        // The shell already serves its assets from local storage, so the
+        // service worker adds no offline benefit — only a stale-bundle hazard.
+        // Its cache lives in WebView storage and survives `adb install -r`, so
+        // a cached bundle silently outlives every APK iteration.
+        expect(
+            shouldEnableServiceWorker(
+                true,
+                { serviceWorker: {} } as Navigator,
+                {
+                    androidShell: true,
+                    protocol: 'http:',
+                }
+            )
+        ).toBe(false);
+    });
+
     it('disables service worker for Electron runtime on non-file origins', () => {
         expect(
             shouldEnableServiceWorker(
