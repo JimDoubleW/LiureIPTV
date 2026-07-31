@@ -1,5 +1,10 @@
 import { isAndroidRuntime } from './android-runtime';
-import { collectCandidates, ensureFocusable } from './spatial-candidates';
+import {
+    collectCandidates,
+    ensureFocusable,
+    isNativelyActivatable,
+    isTextEntry,
+} from './spatial-candidates';
 import { resolveZone, ZoneMemory } from './focus-zones';
 import { findBestCandidate, type TvDirection } from './spatial-geometry';
 import { installTvFocusStyles } from './tv-focus.styles';
@@ -96,8 +101,29 @@ function move(direction: TvDirection): boolean {
     return true;
 }
 
+/**
+ * The remote's OK button. Native controls activate themselves on Enter; the
+ * clickable `div`s that make up most tiles and rows do not, so without this the
+ * D-pad can reach every part of the UI and operate none of it.
+ */
+function activateFocused(event: KeyboardEvent): void {
+    const active = currentElement();
+    if (!active || isNativelyActivatable(active) || isTextEntry(active)) {
+        return;
+    }
+
+    active.click();
+    event.preventDefault();
+    event.stopPropagation();
+}
+
 function onKeyDown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) {
+        return;
+    }
+
+    if (event.key === 'Enter') {
+        activateFocused(event);
         return;
     }
 
@@ -110,6 +136,13 @@ function onKeyDown(event: KeyboardEvent): void {
     // open menu owns them, and stealing them breaks the control.
     const active = currentElement();
     if (active?.closest('[role="menu"], [role="slider"], select')) {
+        return;
+    }
+
+    // Text entry keeps its arrows too: the Android IME is open over it and owns
+    // the remote until the user backs out. Moving focus underneath it would
+    // leave the keyboard editing a field nobody is looking at.
+    if (active && isTextEntry(active)) {
         return;
     }
 

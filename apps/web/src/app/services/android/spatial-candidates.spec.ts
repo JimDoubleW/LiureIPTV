@@ -1,4 +1,9 @@
-import { ensureFocusable, isTextEntry } from './spatial-candidates';
+import {
+    ensureFocusable,
+    isNativelyActivatable,
+    isPointerWidgetRoot,
+    isTextEntry,
+} from './spatial-candidates';
 
 function element(html: string): HTMLElement {
     document.body.innerHTML = html;
@@ -38,6 +43,58 @@ describe('spatial candidates', () => {
         ])('treats %s as reachable', (html) => {
             expect(isTextEntry(element(html))).toBe(false);
         });
+    });
+
+    describe('isPointerWidgetRoot', () => {
+        it('accepts the clickable card itself', () => {
+            const card = element('<div style="cursor: pointer"></div>');
+
+            expect(isPointerWidgetRoot(card)).toBe(true);
+        });
+
+        it('rejects the text inside a clickable card', () => {
+            // `cursor` inherits, so the description paragraph also reports
+            // pointer. Accepting it drew the focus ring around a line of text
+            // inside the "Add playlist" cards instead of around the card.
+            element(`
+                <div style="cursor: pointer">
+                    <h3 style="cursor: pointer">Xtream credentials</h3>
+                    <p style="cursor: pointer" id="description">
+                        Connect with host, username and password
+                    </p>
+                </div>
+            `);
+            const description = document.getElementById('description');
+            if (!(description instanceof HTMLElement)) {
+                throw new Error('fixture missing');
+            }
+
+            expect(isPointerWidgetRoot(description)).toBe(false);
+        });
+
+        it('rejects an element that is not clickable at all', () => {
+            const plain = element('<div style="cursor: default"></div>');
+
+            expect(isPointerWidgetRoot(plain)).toBe(false);
+        });
+    });
+
+    describe('isNativelyActivatable', () => {
+        it.each([['<button></button>'], ['<a href="#"></a>'], ['<select></select>']])(
+            'lets the browser activate %s itself',
+            (html) => {
+                expect(isNativelyActivatable(element(html))).toBe(true);
+            }
+        );
+
+        it.each([['<div></div>'], ['<li></li>'], ['<div role="button"></div>']])(
+            'reports %s as needing a synthetic click',
+            (html) => {
+                // Enter does nothing on these, so the remote's OK button would
+                // move focus around a UI it could never operate.
+                expect(isNativelyActivatable(element(html))).toBe(false);
+            }
+        );
     });
 
     describe('ensureFocusable', () => {

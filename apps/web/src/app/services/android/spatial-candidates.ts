@@ -21,10 +21,15 @@ const NATIVE_FOCUSABLE =
 const VIEWPORT_MARGIN_PX = 120;
 
 /**
- * Focusing a text field opens the Android IME, which halves the viewport and
- * swallows the remote's key events before the WebView ever sees them — the
- * remote goes dead until the user finds "back". Text entry is therefore never
- * an arrow-key destination; search has to be a destination screen instead.
+ * Text entry needs different handling: focusing it opens the Android IME, which
+ * halves the viewport and swallows key events before the WebView sees them.
+ *
+ * The answer is *not* to make these unreachable. Excluding them from traversal
+ * makes forms impossible to fill from a remote — you cannot even enter the
+ * portal credentials the app needs to do anything. Instead they stay reachable,
+ * and the navigation engine yields its arrow keys whenever one holds focus, so
+ * the IME owns them until the user presses back.
+ *
  * See docs/android-port/tv-navigation-reference.md.
  */
 export function isTextEntry(element: Element): boolean {
@@ -58,6 +63,28 @@ function isDisabled(element: Element): boolean {
 
 function isNativelyFocusable(element: Element): boolean {
     return element.matches(NATIVE_FOCUSABLE);
+}
+
+/**
+ * True when `element` is the outermost element of an inherited `cursor: pointer`
+ * chain — that is, the clickable widget itself rather than a fragment of it.
+ *
+ * `cursor` inherits, so every descendant of a clickable card also reports
+ * `pointer`. Treating the innermost match as the target therefore lands focus on
+ * whichever paragraph sits deepest inside the card, which is both meaningless
+ * and visibly wrong: the focus ring wraps a line of description text instead of
+ * the card. Taking the top of the chain gives the widget.
+ *
+ * Natively focusable descendants are handled separately and stay reachable, so
+ * a real button inside a clickable card is not lost.
+ */
+export function isPointerWidgetRoot(element: HTMLElement): boolean {
+    if (getComputedStyle(element).cursor !== 'pointer') {
+        return false;
+    }
+
+    const parent = element.parentElement;
+    return !parent || getComputedStyle(parent).cursor !== 'pointer';
 }
 
 function isVisible(element: HTMLElement, rect: DOMRect): boolean {
@@ -113,7 +140,7 @@ export function collectCandidates(
     const matched: { element: HTMLElement; rect: DOMRect }[] = [];
 
     for (const element of all) {
-        if (isDisabled(element) || isTextEntry(element)) {
+        if (isDisabled(element)) {
             continue;
         }
 
@@ -127,31 +154,28 @@ export function collectCandidates(
         if (!isVisible(element, rect)) {
             continue;
         }
-        if (
-            !isNativelyFocusable(element) &&
-            getComputedStyle(element).cursor !== 'pointer'
-        ) {
+        if (!isNativelyFocusable(element) && !isPointerWidgetRoot(element)) {
             continue;
         }
 
         matched.push({ element, rect });
     }
 
-    // Keep the innermost match only. A clickable card and the clickable row
-    // inside it both qualify, and focusing the outer one makes everything it
-    // wraps unreachable.
-    return matched
-        .filter(
-            ({ element }) =>
-                !matched.some(
-                    (other) =>
-                        other.element !== element && element.contains(other.element)
-                )
-        )
-        .map(({ element, rect }) => ({
-            target: element,
-            rect: toFocusRect(rect),
-        }));
+    return matched.map(({ element, rect }) => ({
+        target: element,
+        rect: toFocusRect(rect),
+    }));
+}
+
+/**
+ * True when the browser already activates this element on Enter.
+ *
+ * Everything else — the clickable `div`s that make up most tiles and rows —
+ * receives the key and does nothing, so the remote's OK button would move focus
+ * around a UI it can never actually operate.
+ */
+export function isNativelyActivatable(element: Element): boolean {
+    return element.matches('button, a[href], input, select, textarea, summary');
 }
 
 /**
