@@ -13,9 +13,18 @@ import type { FocusCandidate, FocusRect } from './spatial-geometry';
  *   by the viewport.
  */
 
-/** Natively focusable, minus text entry — see `isTextEntry`. */
+/**
+ * Everything the browser focuses on its own.
+ *
+ * Text entry belongs here. It once did not, on the reasoning that the Android
+ * IME makes those fields hostile — but omitting them does not tame the IME, it
+ * only makes every form in the app impossible to fill from a remote, starting
+ * with the portal credentials. They are reached like anything else; what makes
+ * them safe is that the engine hands its arrow keys back while one holds focus.
+ */
 const NATIVE_FOCUSABLE =
-    'a[href], button, select, [tabindex]:not([tabindex="-1"])';
+    'a[href], button, select, textarea, [contenteditable="true"],' +
+    ' input:not([type="hidden"]), [tabindex]:not([tabindex="-1"])';
 
 /** Elements nearly off-screen still count, so focus can pull the list along. */
 const VIEWPORT_MARGIN_PX = 120;
@@ -61,7 +70,12 @@ function isDisabled(element: Element): boolean {
     );
 }
 
-function isNativelyFocusable(element: Element): boolean {
+/**
+ * Whether the browser will focus this element on its own. Exported so the
+ * regression that text inputs were absent from the selector — which made every
+ * form unreachable by remote — stays covered.
+ */
+export function isNativelyFocusable(element: Element): boolean {
     return element.matches(NATIVE_FOCUSABLE);
 }
 
@@ -121,10 +135,11 @@ function toFocusRect(rect: DOMRect): FocusRect {
 /**
  * Every element the D-pad may move to right now.
  *
- * `cursor: pointer` is the tie-breaker for elements matched only by
- * `CLICKABLE_HINT`: it is how the app already tells the user "this reacts to a
- * click", so it is the most reliable signal available without annotating every
- * component. `getComputedStyle` is why the candidate set is bounded first.
+ * An element qualifies if the browser focuses it natively, or if it is the root
+ * of a `cursor: pointer` chain. That second test is how the app's clickable
+ * `div`s are found: the pointer cursor is how it already tells the user "this
+ * reacts to a click", which makes it the most reliable signal available without
+ * annotating every component.
  */
 export function collectCandidates(
     root: ParentNode = document

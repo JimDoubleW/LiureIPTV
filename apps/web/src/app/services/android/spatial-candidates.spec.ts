@@ -1,6 +1,7 @@
 import {
     ensureFocusable,
     isNativelyActivatable,
+    isNativelyFocusable,
     isPointerWidgetRoot,
     isTextEntry,
 } from './spatial-candidates';
@@ -42,6 +43,26 @@ describe('spatial candidates', () => {
             ['<div></div>'],
         ])('treats %s as reachable', (html) => {
             expect(isTextEntry(element(html))).toBe(false);
+        });
+    });
+
+    describe('isNativelyFocusable', () => {
+        // Text entry was once left out of this selector, on the reasoning that
+        // the IME makes those fields hostile. The effect was that no form in
+        // the app could be filled from a remote — including the Xtream
+        // credentials, without which the app does nothing at all.
+        it.each([
+            ['<input type="text" />'],
+            ['<input type="password" />'],
+            ['<input />'],
+            ['<textarea></textarea>'],
+            ['<div contenteditable="true"></div>'],
+        ])('reaches %s', (html) => {
+            expect(isNativelyFocusable(element(html))).toBe(true);
+        });
+
+        it('ignores hidden inputs', () => {
+            expect(isNativelyFocusable(element('<input type="hidden" />'))).toBe(false);
         });
     });
 
