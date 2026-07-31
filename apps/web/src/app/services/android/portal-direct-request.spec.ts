@@ -1,6 +1,7 @@
 import {
     buildPlayerApiUrl,
     forwardableParams,
+    parseProviderData,
     ProviderTargetRegistry,
     wrapProviderPayload,
 } from './portal-direct-request';
@@ -79,6 +80,27 @@ describe('portal direct request', () => {
             expect(forwardableParams({ action: 'get_series' })).toEqual({
                 action: 'get_series',
             });
+        });
+    });
+
+    describe('parseProviderData', () => {
+        // Native HTTP parses the body only when the provider sets a JSON
+        // content type, and IPTV providers are inconsistent about that.
+        it('parses a JSON string body', () => {
+            expect(parseProviderData('[{"id":1}]')).toEqual([{ id: 1 }]);
+        });
+
+        it('passes an already-parsed body through', () => {
+            const parsed = [{ id: 1 }];
+            expect(parseProviderData(parsed)).toBe(parsed);
+        });
+
+        it('returns unparseable bodies untouched for the caller to handle', () => {
+            // Providers answer errors with an HTML page; throwing here would
+            // hide the real message from PwaService's error normalisation.
+            expect(parseProviderData('<html>denied</html>')).toBe(
+                '<html>denied</html>'
+            );
         });
     });
 

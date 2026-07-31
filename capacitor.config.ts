@@ -24,13 +24,20 @@ const config: CapacitorConfig = {
         allowMixedContent: true,
     },
     plugins: {
-        // Patches fetch and XMLHttpRequest to issue requests through the native
-        // HTTP stack, which is not subject to CORS. This is what lets the app
-        // talk to IPTV providers directly and drop the web-backend proxy —
-        // that proxy only ever existed to work around CORS in a browser, and
-        // depending on a machine outside the box defeats the port.
+        /*
+         * Deliberately NOT enabled.
+         *
+         * Enabling it patches `fetch` and `XMLHttpRequest` globally, and the
+         * native stack reads a response to completion before handing it back.
+         * That is fine for a JSON API and fatal for media: a live MPEG-TS
+         * stream never completes, so `mpegts.js` waits forever and the player
+         * shows a spinner over a black screen.
+         *
+         * Native HTTP is used explicitly where CORS actually matters — see
+         * PortalDirectInterceptor — and the browser stack keeps the streams.
+         */
         CapacitorHttp: {
-            enabled: true,
+            enabled: false,
         },
     },
 };

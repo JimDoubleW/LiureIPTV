@@ -7,11 +7,13 @@ import {
     HttpResponse,
 } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { map, Observable, of } from 'rxjs';
+import { CapacitorHttp } from '@capacitor/core';
+import { from, map, Observable, of } from 'rxjs';
 import { isAndroidRuntime } from './android-runtime';
 import {
     buildPlayerApiUrl,
     forwardableParams,
+    parseProviderData,
     ProviderTargetRegistry,
     TARGET_ID_PARAM,
     wrapProviderPayload,
@@ -47,7 +49,7 @@ export class PortalDirectInterceptor implements HttpInterceptor {
         }
 
         if (request.method === 'GET' && this.isRoute(request, 'xtream')) {
-            return this.forwardToProvider(request, next);
+            return this.forwardToProvider(request);
         }
 
         return next.handle(request);
@@ -89,8 +91,7 @@ export class PortalDirectInterceptor implements HttpInterceptor {
     }
 
     private forwardToProvider(
-        request: HttpRequest<unknown>,
-        next: HttpHandler
+        request: HttpRequest<unknown>
     ): Observable<HttpEvent<unknown>> {
         const targetId = request.params.get(TARGET_ID_PARAM);
         const providerUrl = targetId ? this.targets.resolve(targetId) : null;
@@ -112,18 +113,42 @@ export class PortalDirectInterceptor implements HttpInterceptor {
         const params = forwardableParams(this.asRecord(request.params));
         const action = params['action'];
 
-        const providerRequest = request.clone({
+        // Native HTTP is requested explicitly here rather than by enabling
+        // Capacitor's global fetch/XHR patch. The patch reads every response to
+        // completion, which is correct for this JSON call and fatal for a live
+        // MPEG-TS stream that never ends — the player would spin forever.
+        // Scoping it to the portal API keeps media on the browser stack.
+        const providerRequest = CapacitorHttp.get({
             url: buildPlayerApiUrl(providerUrl),
-            params: new HttpParams({ fromObject: params }),
+            params,
+            headers: this.headersOf(request),
         });
 
-        return next.handle(providerRequest).pipe(
-            map((event) =>
-                event instanceof HttpResponse
-                    ? event.clone({ body: wrapProviderPayload(action, event.body) })
-                    : event
+        return from(providerRequest).pipe(
+            map(
+                (response) =>
+                    new HttpResponse({
+                        status: response.status,
+                        body: wrapProviderPayload(
+                            action,
+                            parseProviderData(response.data)
+                        ),
+                    })
             )
         );
+    }
+
+    private headersOf(request: HttpRequest<unknown>): Record<string, string> {
+        const headers: Record<string, string> = {};
+
+        for (const key of request.headers.keys()) {
+            const value = request.headers.get(key);
+            if (value !== null) {
+                headers[key] = value;
+            }
+        }
+
+        return headers;
     }
 
     private asRecord(params: HttpParams): Record<string, string> {

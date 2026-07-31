@@ -91,3 +91,24 @@ export function wrapProviderPayload(
 ): { action: string | undefined; payload: unknown } {
     return { action, payload };
 }
+
+/**
+ * Normalises what native HTTP hands back.
+ *
+ * The native stack returns the body already parsed when the provider sets a
+ * JSON content type, and as a raw string when it does not — and IPTV providers
+ * are inconsistent about that. Downstream code expects an object either way.
+ */
+export function parseProviderData(data: unknown): unknown {
+    if (typeof data !== 'string') {
+        return data;
+    }
+
+    try {
+        return JSON.parse(data);
+    } catch {
+        // Providers answer errors with an HTML page; leave it for the caller's
+        // error handling rather than throwing here.
+        return data;
+    }
+}
