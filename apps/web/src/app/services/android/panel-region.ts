@@ -44,9 +44,83 @@ export function resolveRegion(element: Element): TvRegion {
     return 'context';
 }
 
+/**
+ * The category column. Named explicitly because the rail is an `<aside>` too,
+ * so a bare `aside` selector would collapse the navigation rail as well.
+ */
+const CONTEXT_PANEL_SELECTOR = 'aside.context-panel';
+
+export function getContextPanel(): HTMLElement | null {
+    return document.querySelector<HTMLElement>(CONTEXT_PANEL_SELECTOR);
+}
+
+/**
+ * Publishes the region and takes the collapsed column out of the focus order.
+ *
+ * `inert` is what makes a full-width collapse safe. Narrowing the panel alone
+ * does not shrink its children: they keep their layout box and simply overflow
+ * the clipped container, so they stay perfectly focusable while being invisible
+ * on screen — measured at `max-width: 1px`, ten items still reported a 28 px
+ * width. Focus would disappear into a panel nobody can see, which is more
+ * disorienting than a hard stop. `inert` removes them from focus outright, and
+ * `collectCandidates` already skips anything inside `[inert]`.
+ */
 export function applyRegion(element: Element): void {
-    document.documentElement.setAttribute(
-        REGION_ATTRIBUTE,
-        resolveRegion(element)
-    );
+    const region = resolveRegion(element);
+    document.documentElement.setAttribute(REGION_ATTRIBUTE, region);
+
+    const panel = getContextPanel();
+    if (!panel) {
+        return;
+    }
+
+    if (region === 'content') {
+        panel.setAttribute('inert', '');
+    } else {
+        panel.removeAttribute('inert');
+    }
+}
+
+/**
+ * Brings the category column back and makes it focusable again.
+ *
+ * Returns the panel so the caller can move focus into it; a collapsed panel is
+ * unreachable by geometry alone, so the navigation engine has to ask for this
+ * explicitly when the user presses left with nowhere to go.
+ */
+/**
+ * The last element focused inside the category column.
+ *
+ * The column holds several focus zones — a search affordance in its header, the
+ * category list below — and each keeps its own selection mark. Picking the
+ * first mark in DOM order therefore lands on the header rather than on the row
+ * the user actually left, so the last position is tracked explicitly.
+ */
+let lastContextFocus: HTMLElement | null = null;
+
+export function noteContextFocus(element: HTMLElement): void {
+    if (getContextPanel()?.contains(element)) {
+        lastContextFocus = element;
+    }
+}
+
+export function getLastContextFocus(): HTMLElement | null {
+    if (lastContextFocus && !lastContextFocus.isConnected) {
+        lastContextFocus = null;
+    }
+    return lastContextFocus;
+}
+
+export function expandContext(): HTMLElement | null {
+    const panel = getContextPanel();
+    if (!panel) {
+        return null;
+    }
+
+    document.documentElement.setAttribute(REGION_ATTRIBUTE, 'context');
+    panel.removeAttribute('inert');
+
+    // Force layout so the caller measures the expanded panel, not the old one.
+    panel.getBoundingClientRect();
+    return panel;
 }

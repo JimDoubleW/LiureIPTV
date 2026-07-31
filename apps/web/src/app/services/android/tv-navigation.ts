@@ -6,7 +6,14 @@ import {
     isTextEntry,
 } from './spatial-candidates';
 import { resolveZone, ZoneMemory } from './focus-zones';
-import { applyRegion } from './panel-region';
+import {
+    applyRegion,
+    expandContext,
+    getContextPanel,
+    getLastContextFocus,
+    noteContextFocus,
+    resolveRegion,
+} from './panel-region';
 import {
     clearVirtualFocus,
     getVirtualFocus,
@@ -69,6 +76,7 @@ function applyFocus(element: HTMLElement): void {
     element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 
     memory.remember(element);
+    noteContextFocus(element);
     applyRegion(element);
 }
 
@@ -91,10 +99,55 @@ function focusFirstCandidate(): boolean {
     return true;
 }
 
+/**
+ * Unfolds the collapsed category column and lands on the row it was left on.
+ *
+ * The panel has to be expanded before its candidates can be collected: while
+ * inert its children are excluded by design.
+ */
+function reopenContextPanel(): boolean {
+    const panel = expandContext();
+    if (!panel) {
+        return false;
+    }
+
+    // Not read from the selection marks: the column holds several zones, and
+    // the first mark in DOM order is the one in its header, not the row the
+    // user left. Candidate collection is no help either — the panel is
+    // mid-transition and still measures near zero, so the row would be filtered
+    // out as invisible.
+    const remembered = getLastContextFocus();
+    if (remembered) {
+        applyFocus(remembered);
+        return true;
+    }
+
+    const candidates = collectCandidates(panel);
+    if (candidates.length === 0) {
+        return false;
+    }
+
+    applyFocus(candidates[0].target);
+    return true;
+}
+
 function move(direction: TvDirection): boolean {
     const origin = currentElement();
     if (!origin) {
         return focusFirstCandidate();
+    }
+
+    // Left out of the content restores the folded column first, one panel at a
+    // time. Geometry alone would skip straight past it to the rail, which is
+    // still on screen — the user would lose the categories entirely and have to
+    // come back through the rail to find them again.
+    if (
+        direction === 'left' &&
+        resolveRegion(origin) === 'content' &&
+        getContextPanel()?.hasAttribute('inert') === true &&
+        reopenContextPanel()
+    ) {
+        return true;
     }
 
     const candidates = collectCandidates().filter(
@@ -107,8 +160,8 @@ function move(direction: TvDirection): boolean {
     );
 
     if (!target) {
-        // Nothing that way. Deliberately do not wrap around: on a TV the user
-        // cannot see where focus went, and wrapping reads as focus vanishing.
+        // Deliberately do not wrap around: on a TV the user cannot see where
+        // focus went, and wrapping reads as focus vanishing.
         return false;
     }
 

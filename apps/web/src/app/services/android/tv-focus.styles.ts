@@ -29,7 +29,7 @@ const TV_FOCUS_CSS = `
     --tv-focus-ink: #0a0a0a;
     --tv-selected-fill: rgba(255, 255, 255, 0.1);
     --tv-focus-radius: 8px;
-    --tv-collapsed-panel: 88px;
+    --tv-collapsed-panel: 0px;
 }
 
 /*
@@ -98,10 +98,10 @@ const TV_FOCUS_CSS = `
  * it even while the user is three panels away. Once focus reaches the content,
  * the column narrows and the content takes the space back.
  *
- * It narrows to a strip rather than to nothing, and that is load-bearing: a
- * zero-width panel has zero-sized children, candidate collection drops them,
- * and pressing left would find nothing to move to — focus would be trapped in
- * the content with no way back.
+ * The column folds away completely. Width alone would not be safe — clipped
+ * children keep their layout box and stay focusable while invisible — so
+ * panel-region.ts marks the collapsed panel \`inert\`, and tv-navigation.ts
+ * unfolds it when the user presses left with nowhere else to go.
  *
  * The selector names the category column explicitly because the rail is an
  * \`<aside>\` too: a bare \`aside\` collapsed both, the rail included.
@@ -109,6 +109,9 @@ const TV_FOCUS_CSS = `
 [data-tv-nav][${REGION_ATTRIBUTE}="content"] aside.context-panel {
     max-width: var(--tv-collapsed-panel) !important;
     min-width: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    border: 0 !important;
     overflow: hidden !important;
 }
 

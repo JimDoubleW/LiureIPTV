@@ -1,4 +1,9 @@
-import { applyRegion, REGION_ATTRIBUTE, resolveRegion } from './panel-region';
+import {
+    applyRegion,
+    expandContext,
+    REGION_ATTRIBUTE,
+    resolveRegion,
+} from './panel-region';
 
 function byId(id: string): HTMLElement {
     const element = document.getElementById(id);
@@ -53,6 +58,50 @@ describe('panel region', () => {
         document.body.innerHTML = '<div><button id="loose"></button></div>';
 
         expect(resolveRegion(byId('loose'))).toBe('context');
+    });
+
+    describe('collapsing the category column', () => {
+        beforeEach(() => {
+            document.body.innerHTML = `
+                <aside class="context-panel"><button id="category"></button></aside>
+                <main><button id="tile"></button></main>
+            `;
+        });
+
+        it('makes the collapsed column inert', () => {
+            // Width alone is not enough: clipped children keep their layout box
+            // and stay focusable while invisible, so focus would vanish into a
+            // panel nobody can see.
+            applyRegion(byId('tile'));
+
+            const panel = document.querySelector('aside.context-panel');
+            expect(panel?.hasAttribute('inert')).toBe(true);
+        });
+
+        it('restores it as soon as focus leaves the content', () => {
+            applyRegion(byId('tile'));
+            applyRegion(byId('category'));
+
+            const panel = document.querySelector('aside.context-panel');
+            expect(panel?.hasAttribute('inert')).toBe(false);
+        });
+
+        it('unfolds on demand so left has somewhere to go', () => {
+            applyRegion(byId('tile'));
+
+            const panel = expandContext();
+
+            expect(panel?.hasAttribute('inert')).toBe(false);
+            expect(document.documentElement.getAttribute(REGION_ATTRIBUTE)).toBe(
+                'context'
+            );
+        });
+
+        it('reports nothing to unfold when the column is absent', () => {
+            document.body.innerHTML = '<main></main>';
+
+            expect(expandContext()).toBeNull();
+        });
     });
 
     it('publishes the region on the document element', () => {
