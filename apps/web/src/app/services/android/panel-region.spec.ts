@@ -1,6 +1,7 @@
 import {
     applyRegion,
     expandContext,
+    isRegionCrossingAllowed,
     REGION_ATTRIBUTE,
     resolveRegion,
 } from './panel-region';
@@ -111,6 +112,42 @@ describe('panel region', () => {
             document.body.innerHTML = '<main></main>';
 
             expect(expandContext()).toBeNull();
+        });
+    });
+
+    describe('isRegionCrossingAllowed', () => {
+        beforeEach(() => {
+            document.body.innerHTML = `
+                <aside class="app-rail"><nav><a id="rail-link"></a></nav></aside>
+                <main><button id="play"></button><button id="more"></button></main>
+            `;
+        });
+
+        it('blocks vertical moves into the rail', () => {
+            // The rail spans the full height, so it is the spatial neighbour of
+            // everything; without this rule, down from a detail page's back
+            // button scored a rail link above the Play button.
+            expect(
+                isRegionCrossingAllowed(byId('play'), byId('rail-link'), 'down')
+            ).toBe(false);
+        });
+
+        it('blocks vertical moves out of the rail', () => {
+            expect(
+                isRegionCrossingAllowed(byId('rail-link'), byId('play'), 'up')
+            ).toBe(false);
+        });
+
+        it('keeps vertical moves within a region', () => {
+            expect(isRegionCrossingAllowed(byId('play'), byId('more'), 'down')).toBe(
+                true
+            );
+        });
+
+        it('leaves horizontal crossings alone — that is what left/right are for', () => {
+            expect(
+                isRegionCrossingAllowed(byId('play'), byId('rail-link'), 'left')
+            ).toBe(true);
         });
     });
 

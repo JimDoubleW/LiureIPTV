@@ -70,6 +70,29 @@ export function getContextPanel(): HTMLElement | null {
  * disorienting than a hard stop. `inert` removes them from focus outright, and
  * `collectCandidates` already skips anything inside `[inert]`.
  */
+/**
+ * Whether a move in `direction` may go from `origin` to `target`.
+ *
+ * Vertical movement never crosses the rail boundary, in either direction. The
+ * rail is a narrow column spanning the full screen height, which makes it the
+ * spatial neighbour of everything: pressing down on a movie detail's back
+ * button scored a rail link (x=8, nearly aligned) above the Play button
+ * (x=390, penalised on the cross axis), so the rail kept capturing focus that
+ * belonged to the content. Entering and leaving the rail is what left/right
+ * are for.
+ */
+export function isRegionCrossingAllowed(
+    origin: Element,
+    target: Element,
+    direction: 'up' | 'down' | 'left' | 'right'
+): boolean {
+    if (direction === 'left' || direction === 'right') {
+        return true;
+    }
+
+    return (resolveRegion(origin) === 'rail') === (resolveRegion(target) === 'rail');
+}
+
 export function applyRegion(element: Element): void {
     const region = resolveRegion(element);
     document.documentElement.setAttribute(REGION_ATTRIBUTE, region);

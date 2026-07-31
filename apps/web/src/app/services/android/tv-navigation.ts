@@ -11,6 +11,7 @@ import {
     expandContext,
     getContextPanel,
     getLastContextFocus,
+    isRegionCrossingAllowed,
     noteContextFocus,
     resolveRegion,
 } from './panel-region';
@@ -152,7 +153,9 @@ function move(direction: TvDirection): boolean {
     }
 
     const candidates = collectCandidates().filter(
-        (candidate) => candidate.target !== origin
+        (candidate) =>
+            candidate.target !== origin &&
+            isRegionCrossingAllowed(origin, candidate.target, direction)
     );
     const target = findBestCandidate(
         origin.getBoundingClientRect(),
@@ -169,7 +172,11 @@ function move(direction: TvDirection): boolean {
         if (scrollToReveal(origin, direction)) {
             const revealed = findBestCandidate(
                 origin.getBoundingClientRect(),
-                collectCandidates().filter((c) => c.target !== origin),
+                collectCandidates().filter(
+                    (c) =>
+                        c.target !== origin &&
+                        isRegionCrossingAllowed(origin, c.target, direction)
+                ),
                 direction
             );
             if (revealed) {
