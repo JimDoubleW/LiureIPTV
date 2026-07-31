@@ -241,6 +241,19 @@ is what makes a single menu key sufficient for every context.
 
 ## The preview keeps playing
 
+**Where our app already matches, measured on the device:** playback survives
+every move *inside* the live section — walking the grid, crossing into the
+category column, even switching category. That is where nearly all browsing
+happens, so the pattern is largely already in place.
+
+**Where it does not:** the player lives in the routed live layout, so leaving
+for Movies or Series destroys it. Returning now resumes the channel
+automatically (`LivePlaybackMemoryService`), but video does stop while the user
+is in another section. True cross-section persistence needs the player hoisted
+into the workspace shell, which touches components upstream rewrites often — a
+deliberate trade, not an oversight.
+
+
 Video runs continuously throughout browsing — the overlay is translucent over
 it, and the guide keeps it as a thumbnail. Exploring never stops playback.
 Expensive for us, since our player is tied to the route, but it is the expected

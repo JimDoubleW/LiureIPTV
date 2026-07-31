@@ -1,5 +1,6 @@
 export * from './lib/account-info/account-info.interface';
 export * from './lib/data-sources';
+export * from './lib/live-playback-memory.service';
 export * from './lib/services';
 export * from './lib/stores';
 export * from './lib/with-favorites.feature';

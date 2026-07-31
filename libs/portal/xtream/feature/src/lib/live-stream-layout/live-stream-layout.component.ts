@@ -46,6 +46,7 @@ import {
     FavoritesService,
     XtreamUrlService,
     XtreamStore,
+    LivePlaybackMemoryService,
 } from '@iptvnator/portal/xtream/data-access';
 import {
     EpgDateNavigationDirection,
@@ -117,6 +118,7 @@ export class LiveStreamLayoutComponent implements OnInit, OnDestroy {
     private readonly router = inject(Router);
     private readonly favoritesService = inject(FavoritesService);
     private readonly xtreamStore = inject(XtreamStore);
+    private readonly livePlaybackMemory = inject(LivePlaybackMemoryService);
     private readonly xtreamUrlService = inject(XtreamUrlService);
     private readonly runtime = inject(RuntimeCapabilitiesService);
     private readonly settingsStore = inject(SettingsStore);
@@ -273,7 +275,13 @@ export class LiveStreamLayoutComponent implements OnInit, OnDestroy {
     readonly usesEmbeddedPlayer = computed(() =>
         this.portalPlayer.isEmbeddedPlayer()
     );
-    readonly activePlayback = signal<ResolvedPortalPlayback | null>(null);
+    /**
+     * Backed by a root-provided service so the channel survives leaving the
+     * route: a component-local signal meant that stepping into Movies and back
+     * lost what you were watching. Still a writable signal, so every `.set()`
+     * below is unchanged.
+     */
+    readonly activePlayback = this.livePlaybackMemory.playback;
     readonly activeStreamUrl = computed(
         () => this.activePlayback()?.streamUrl ?? ''
     );
@@ -419,6 +427,11 @@ export class LiveStreamLayoutComponent implements OnInit, OnDestroy {
         );
 
         const playlist = this.xtreamStore.currentPlaylist();
+
+        // The remembered channel belongs to one portal; resuming it against a
+        // different provider would play the wrong thing or a dead URL.
+        this.livePlaybackMemory.forgetIfOtherPlaylist(playlist?.id);
+
         if (playlist) {
             this.favoritesService
                 .getFavorites(playlist.id)
@@ -441,6 +454,7 @@ export class LiveStreamLayoutComponent implements OnInit, OnDestroy {
         // sync with the category rail. For already-selected channels this is a
         // store no-op.
         this.selectLiveItemCategory(item);
+        this.livePlaybackMemory.remember(this.xtreamStore.currentPlaylist()?.id);
         this.activePlayback.set({
             streamUrl,
             title: item.title ?? item.name ?? '',
@@ -654,6 +668,7 @@ export class LiveStreamLayoutComponent implements OnInit, OnDestroy {
         );
 
         this.activeCatchupProgram.set(program);
+        this.livePlaybackMemory.remember(this.xtreamStore.currentPlaylist()?.id);
         this.activePlayback.set({
             streamUrl: catchupUrl,
             title: this.getCatchupPlaybackTitle(item, program),
