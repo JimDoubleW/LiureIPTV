@@ -2,7 +2,6 @@ import { isAndroidRuntime } from './android-runtime';
 import {
     collectCandidates,
     ensureFocusable,
-    isNativelyActivatable,
     isTextEntry,
 } from './spatial-candidates';
 import { resolveZone, ZoneMemory } from './focus-zones';
@@ -204,34 +203,26 @@ function move(direction: TvDirection): boolean {
 }
 
 /**
- * The remote's OK button. Native controls activate themselves on Enter; the
- * clickable `div`s that make up most tiles and rows do not, so without this the
- * D-pad can reach every part of the UI and operate none of it.
+ * The remote's OK button.
+ *
+ * Clicks everything itself, native controls included. The native key layer
+ * consumes DPAD_CENTER/ENTER before the WebView sees them, so the browser's
+ * own Enter-activates-buttons behaviour never runs any more — if this only
+ * clicked the non-native elements, every real <button> would go dead.
  */
-function activateFocused(event: KeyboardEvent): void {
+function activate(): boolean {
     const active = currentElement();
     if (!active) {
-        return;
+        return false;
     }
 
     // Granting real focus is what raises the keyboard; no coaxing needed.
-    if (isTextEntry(active) && promoteVirtualFocus()) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-    }
-
     if (isTextEntry(active)) {
-        return;
-    }
-
-    if (isNativelyActivatable(active)) {
-        return;
+        return promoteVirtualFocus();
     }
 
     active.click();
-    event.preventDefault();
-    event.stopPropagation();
+    return true;
 }
 
 function onKeyDown(event: KeyboardEvent): void {
@@ -240,7 +231,10 @@ function onKeyDown(event: KeyboardEvent): void {
     }
 
     if (event.key === 'Enter') {
-        activateFocused(event);
+        if (activate()) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
         return;
     }
 
@@ -274,6 +268,35 @@ function onKeyDown(event: KeyboardEvent): void {
     }
 }
 
+const NATIVE_KEYS: Readonly<Record<string, TvDirection | 'ok'>> = {
+    up: 'up',
+    down: 'down',
+    left: 'left',
+    right: 'right',
+    ok: 'ok',
+};
+
+/**
+ * Entry point for the native key layer. MainActivity.dispatchKeyEvent consumes
+ * the D-pad before the WebView can run its own focus search — the search that
+ * raised the IME on traversal and teleported focus when a key was declined —
+ * and forwards each press here. Once the native layer is in place, this is the
+ * only way D-pad input reaches the app.
+ */
+function dispatchFromNative(key: string): void {
+    const mapped = NATIVE_KEYS[key];
+    if (!mapped) {
+        return;
+    }
+
+    if (mapped === 'ok') {
+        activate();
+        return;
+    }
+
+    move(mapped);
+}
+
 let armed = false;
 
 /**
@@ -287,7 +310,12 @@ export function armTvNavigation(): void {
     armed = true;
 
     installTvFocusStyles();
-    // Capture phase: the remote's arrows must be resolved before a component's
-    // own keydown handler consumes them.
+
+    (window as Window & { __tvKeyDispatch?: (key: string) => void }).__tvKeyDispatch =
+        dispatchFromNative;
+
+    // Kept as a fallback for an APK whose native layer predates the dispatch
+    // hook. When the native layer is present these keys are consumed before
+    // the WebView, so this listener simply never fires for them.
     document.addEventListener('keydown', onKeyDown, { capture: true });
 }

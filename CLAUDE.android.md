@@ -345,6 +345,12 @@ and need the same treatment.
 - **4K diagnosis deferred.** Not established whether the WebView failure is
   HEVC-specific or resolution-specific, nor whether `mpegts.js` or the WebView's
   exposed decoders are the blocker. Does not affect the decisions above.
-- **Text inputs and the IME.** Focusing a text field opens the Android IME, which
-  swallows remote key events. The platform-idiomatic answer is a search
-  *destination* rather than an inline field.
+- ~~Text inputs and the IME~~ — **solved natively.** `MainActivity.dispatchKeyEvent`
+  consumes the D-pad before the WebView can run its own focus search, and
+  forwards each press to `window.__tvKeyDispatch`. Fields are traversed with
+  virtual focus (no IME), OK promotes to real focus and asks for the keyboard
+  through `@capacitor/keyboard` (a JS `focus()` from `evaluateJavascript` is
+  not a user gesture, so the IME ignores it), typing works, BACK closes, and
+  while the IME is visible the native layer hands every key back to it. A
+  search *destination* remains the better long-term UX, but inline fields are
+  no longer a trap.

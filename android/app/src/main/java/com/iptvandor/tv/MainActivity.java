@@ -1,5 +1,79 @@
 package com.iptvandor.tv;
 
+import android.os.Build;
+import android.view.KeyEvent;
+import android.view.WindowInsets;
+import android.webkit.WebView;
+
 import com.getcapacitor.BridgeActivity;
 
-public class MainActivity extends BridgeActivity {}
+public class MainActivity extends BridgeActivity {
+
+    /**
+     * Takes the D-pad away from the WebView and hands it to the app's own
+     * navigation engine.
+     *
+     * The WebView moves focus for D-pad keys natively, below the DOM event
+     * layer, where preventDefault() has no reach. That produced two defects no
+     * JavaScript could fix: merely traversing a text field focused it natively
+     * and raised the IME over half the screen, and when the JS engine declined
+     * a key the WebView's own document-order focus search ran anyway,
+     * teleporting focus across panels. Consuming the keys here means the
+     * WebView never runs that search at all; the JS engine
+     * (window.__tvKeyDispatch, installed by armTvNavigation) becomes the only
+     * thing that ever moves focus.
+     *
+     * The one deliberate exception: while the soft keyboard is visible, every
+     * key belongs to it — arrows move the caret, letters type, back closes it.
+     */
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        String key = tvKeyName(event.getKeyCode());
+        if (key == null || isImeVisible()) {
+            return super.dispatchKeyEvent(event);
+        }
+
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+            WebView webView = getBridge().getWebView();
+            if (webView != null) {
+                webView.evaluateJavascript(
+                        "window.__tvKeyDispatch && window.__tvKeyDispatch('" + key + "')",
+                        null);
+            }
+        }
+
+        // Consume DOWN and UP alike: returning false for either would let the
+        // WebView run its native focus search after all.
+        return true;
+    }
+
+    private static String tvKeyName(int keyCode) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_DPAD_UP:
+                return "up";
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+                return "down";
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                return "left";
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                return "right";
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_ENTER:
+                return "ok";
+            default:
+                return null;
+        }
+    }
+
+    private boolean isImeVisible() {
+        // WindowInsets.Type needs API 30. Below that we cannot ask, and
+        // consuming is the safer default: the reference device is API 34, and
+        // a TV without the overlay keyboard visible wants the D-pad captured.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return false;
+        }
+
+        WindowInsets insets = getWindow().getDecorView().getRootWindowInsets();
+        return insets != null && insets.isVisible(WindowInsets.Type.ime());
+    }
+}

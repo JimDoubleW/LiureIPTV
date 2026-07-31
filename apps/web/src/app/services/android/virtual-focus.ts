@@ -61,5 +61,21 @@ export function promoteVirtualFocus(): boolean {
 
     clearVirtualFocus();
     field.focus({ preventScroll: true });
+
+    // focus() alone does not raise the keyboard here: the call originates from
+    // the native key layer via evaluateJavascript, which Android does not count
+    // as a user gesture. Ask for the keyboard explicitly through the Capacitor
+    // plugin; a no-op anywhere it is absent.
+    const capacitor = (
+        globalThis.window as
+            | (Window & {
+                  Capacitor?: {
+                      Plugins?: { Keyboard?: { show?: () => Promise<void> } };
+                  };
+              })
+            | undefined
+    )?.Capacitor;
+    void capacitor?.Plugins?.Keyboard?.show?.()?.catch(() => undefined);
+
     return true;
 }
