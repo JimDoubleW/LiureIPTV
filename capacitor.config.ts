@@ -23,6 +23,16 @@ const config: CapacitorConfig = {
         // usesCleartextTraffic="true" in AndroidManifest.xml.
         allowMixedContent: true,
     },
+    plugins: {
+        // Patches fetch and XMLHttpRequest to issue requests through the native
+        // HTTP stack, which is not subject to CORS. This is what lets the app
+        // talk to IPTV providers directly and drop the web-backend proxy —
+        // that proxy only ever existed to work around CORS in a browser, and
+        // depending on a machine outside the box defeats the port.
+        CapacitorHttp: {
+            enabled: true,
+        },
+    },
 };
 
 export default config;

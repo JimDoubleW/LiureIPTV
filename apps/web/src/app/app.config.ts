@@ -1,4 +1,5 @@
 import {
+    HTTP_INTERCEPTORS,
     HttpClient,
     provideHttpClient,
     withInterceptorsFromDi,
@@ -41,6 +42,7 @@ import {
 } from './services/portal-navigation-actions.service';
 import { providePortalPlaybackPositions } from './services/portal-playback-positions.service';
 import { PwaService } from './services/pwa.service';
+import { PortalDirectInterceptor } from './services/android/portal-direct.interceptor';
 import { shouldEnableServiceWorker } from './services/runtime-config';
 import { provideWorkspaceShellActions } from './services/workspace-shell-actions.service';
 
@@ -108,6 +110,14 @@ export const appConfig: ApplicationConfig = {
         provideRouter(routes, withComponentInputBinding()),
         provideAnimations(),
         provideHttpClient(withInterceptorsFromDi()),
+        {
+            // Android TV port: sends portal traffic straight to the provider
+            // instead of through the web-backend CORS proxy, so the shell needs
+            // no server of its own. Passes through untouched off Capacitor.
+            provide: HTTP_INTERCEPTORS,
+            useClass: PortalDirectInterceptor,
+            multi: true,
+        },
         provideStore({
             router: routerReducer,
             playlistState: playlistReducer,

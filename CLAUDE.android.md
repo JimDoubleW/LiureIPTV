@@ -253,18 +253,39 @@ control, `electron-updater`, window controls, and native file dialogs.
 
 ## Local Test Setup
 
-Not committed, and must be re-established each session:
+**The `web-backend` is no longer needed.** It exists only to work around CORS in
+a browser; native HTTP is not subject to CORS, so the shell talks to providers
+directly and the box is self-contained. `BACKEND_URL` in
+`apps/web/src/assets/app-config.js` is now irrelevant on Android — leave it
+alone, and never commit a local edit to that tracked file.
 
-- Run `web-backend` on port **3000** — its own serve target uses 3333 while
-  `apps/web/proxy.conf.json` targets 3000.
-- Point `apps/web/src/assets/app-config.js` at the dev machine's LAN IP:
-  `window.__IPTVNATOR_CONFIG__.BACKEND_URL = 'http://<lan-ip>:3000'`. `localhost`
-  there resolves to the TV box itself. **That file is tracked — never commit the
-  local edit.**
+Still useful:
+
 - ADB over network does not survive a box reboot: toggle ADB debugging off/on in
   Developer options.
 - Inspect the WebView with
-  `adb forward tcp:9333 localabstract:webview_devtools_remote_<pid>`.
+  `adb forward tcp:9333 localabstract:webview_devtools_remote_<pid>`, then drive
+  it over the DevTools websocket. This is the only way to tell a stale bundle,
+  a CORS refusal and a dead network apart — all three look identical from the
+  UI, and two of them cost a debugging cycle here before the WebView was
+  inspected.
+
+## Portal Transport
+
+Portal traffic bypasses the proxy through `PortalDirectInterceptor`
+(`apps/web/src/app/services/android/`), with `CapacitorHttp` enabled in
+`capacitor.config.ts` so `fetch`/XHR go through the native stack.
+
+The interceptor keeps the proxy's *contract* while removing the proxy: it
+answers `POST /provider-targets` locally from an in-memory registry, and rewrites
+`GET /xtream?targetId=…` into a direct `player_api.php` call, re-wrapping the
+response in the `{action, payload}` envelope. `PwaService` therefore keeps all
+its error normalisation, debug logging and result shaping unchanged.
+
+An interceptor rather than a `DataService` subclass, because `PwaService` marks
+`http` private and owns a lot of behaviour worth reusing. Consequence: only
+Xtream is routed so far — **Stalker and M3U parsing still point at the proxy**
+and need the same treatment.
 
 ## Open Questions
 
