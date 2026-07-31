@@ -1,8 +1,11 @@
 import type {
     ElectronBridgeApi,
     ElectronBridgeEpgMapping,
+    EpgChannelMetadata,
+    EpgProgram,
 } from '@iptvnator/shared/interfaces';
 import { isAndroidRuntime } from './android-runtime';
+import { EpgStore } from './epg/epg-store';
 
 /**
  * A partial `window.electron` for the Android shell, covering the EPG surface.
@@ -19,15 +22,10 @@ import { isAndroidRuntime } from './android-runtime';
  * the whole path behind `supportsEpg`, so without this bridge the app refused
  * to fetch EPG it was perfectly able to get.
  *
- * Two layers with different honesty levels:
- *
- * - **Channel mappings are real**, backed by localStorage — small, per-user
- *   data that must survive restarts.
- * - **The XMLTV store is empty by design.** Lookups return no rows, imports
- *   report themselves as skipped. The measured route for stage 2 is SQLite in
- *   the WebView (see androidtv/main's epg-storage-load-test.md: 1M rows, JS
- *   heap flat at 20 MB); until then, claiming success would corrupt the
- *   freshness bookkeeping.
+ * Backed by SQLite in the WebView (`epg/`), the route chosen by measurement:
+ * a million rows imported with the JS heap flat at 20 MB against a 497 MB
+ * ceiling. Channel mappings stay in localStorage — they are a handful of
+ * per-user overrides, not guide data.
  */
 
 const MAPPINGS_STORAGE_KEY = 'iptvnator:android-epg-mappings';
@@ -98,41 +96,83 @@ export type AndroidEpgBridge = Pick<
     | 'onEpgProgress'
 >;
 
-export function createAndroidEpgBridge(): AndroidEpgBridge {
+export function createAndroidEpgBridge(
+    store: EpgStore = new EpgStore()
+): AndroidEpgBridge {
     return {
-        // ---- XMLTV imports: nothing is stored yet, and that is reported
-        // truthfully. `skipped` carries every URL so the caller knows no data
-        // arrived; success:true because declining is not an error.
-        fetchEpg: (urls) =>
-            Promise.resolve({
-                success: true,
-                message: 'XMLTV import is not available on Android yet',
-                skipped: [...urls],
-            }),
-        forceFetchEpg: (url) =>
-            Promise.resolve({
-                success: true,
-                message: 'XMLTV import is not available on Android yet',
-                skipped: [url],
-            }),
-        clearEpgData: () => Promise.resolve({ success: true }),
-        clearEpgDataForSource: () => Promise.resolve({ success: true }),
+        // ---- XMLTV import. Only stale sources are fetched: an import is
+        // minutes of work, and re-running it for a guide already on disk would
+        // burn the device for nothing.
+        fetchEpg: async (urls) => {
+            const { staleUrls, freshUrls } = await store.freshness(urls, 12);
+            const failed: string[] = [];
 
-        // Everything is permanently stale: there is no local store to be
-        // fresh. Callers respond by attempting a fetch, which reports skipped.
-        checkEpgFreshness: (urls) =>
-            Promise.resolve({ staleUrls: [...urls], freshUrls: [] }),
+            for (const url of staleUrls) {
+                try {
+                    await store.importSource(url);
+                } catch {
+                    failed.push(url);
+                }
+            }
 
-        // ---- XMLTV lookups: an empty store answers with empty results, which
-        // sends the EPG queue to its primary source — the portal API.
-        getChannelPrograms: () => Promise.resolve([]),
+            return {
+                success: failed.length < staleUrls.length || staleUrls.length === 0,
+                skipped: [...freshUrls, ...failed],
+            };
+        },
+        forceFetchEpg: async (url) => {
+            try {
+                await store.importSource(url);
+                return { success: true };
+            } catch (error) {
+                return {
+                    success: false,
+                    message:
+                        error instanceof Error ? error.message : String(error),
+                    skipped: [url],
+                };
+            }
+        },
+        clearEpgData: async () => {
+            await store.clear();
+            return { success: true };
+        },
+        clearEpgDataForSource: async (sourceUrl) => {
+            await store.clearSource(sourceUrl);
+            return { success: true };
+        },
+
+        checkEpgFreshness: (urls, maxAgeHours) =>
+            store.freshness(urls, maxAgeHours ?? 12),
+
+        // ---- Lookups. Failures answer empty rather than rejecting: a guide
+        // that cannot be read must degrade to "no programme information", never
+        // break the channel list around it.
+        getChannelPrograms: (channelId) =>
+            store.channelPrograms(channelId).catch(() => []),
         getCurrentProgramsBatch: (channelIds) =>
-            Promise.resolve(nullsFor(channelIds)),
+            store
+                .currentPrograms(channelIds)
+                .catch(() => nullsFor<EpgProgram>(channelIds)),
         getEpgChannelMetadata: (channelIds) =>
-            Promise.resolve(nullsFor(channelIds)),
-        getEpgChannelsByRange: () => Promise.resolve([]),
-        searchEpgPrograms: () => Promise.resolve([]),
-        searchEpgChannels: () => Promise.resolve([]),
+            store
+                .channelMetadata(channelIds)
+                .catch(() => nullsFor<EpgChannelMetadata>(channelIds)),
+        getEpgChannelsByRange: async (skip, limit) => {
+            const channels = await store.channelsByRange(skip, limit).catch(() => []);
+            return channels.map((channel) => ({
+                id: channel.id,
+                displayName: channel.displayName,
+                iconUrl: channel.iconUrl,
+                // The browser lists channels; programmes are loaded per channel
+                // on demand, because pulling them all is what costs.
+                programs: [],
+            }));
+        },
+        searchEpgPrograms: (searchTerm, limit) =>
+            store.searchPrograms(searchTerm, limit).catch(() => []),
+        searchEpgChannels: (searchTerm, limit) =>
+            store.searchChannels(searchTerm, limit).catch(() => []),
 
         // ---- Manual channel mappings: real and persistent.
         getEpgMapping: (channelKey) => {
@@ -175,9 +215,9 @@ export function createAndroidEpgBridge(): AndroidEpgBridge {
             return Promise.resolve({ success: true });
         },
 
-        // No imports run yet, so there is no progress to report; the callback
-        // is accepted so stage 2 can start emitting without an interface change.
-        onEpgProgress: () => undefined,
+        onEpgProgress: (callback) => {
+            store.onProgress(callback);
+        },
     };
 }
 

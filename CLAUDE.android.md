@@ -338,14 +338,30 @@ simply refusing to ask, because the UI gates the whole path behind
 `supportsEpg`. Programme titles, times and live progress bars now render in the
 channel list. Manual channel mappings are real and persist in `localStorage`.
 
-**Stage 2 (not started): XMLTV import and storage.** The bridge's XMLTV surface
-is empty *and says so* — lookups return no rows, imports report every URL as
-`skipped`, freshness reports everything stale. Claiming success would corrupt
-the freshness bookkeeping. The measured route is SQLite in the WebView: see
-`git show androidtv/main:docs/android-port/epg-storage-load-test.md` — 1M rows
-with the JS heap flat at 20 MB, plus two query-shape findings that also apply
-to the desktop code (never wrap the column in `datetime()`; bound the time
-window).
+**Stage 2 (done): XMLTV import and storage**, in `services/android/epg/`.
+SQLite in the WebView via `@capacitor-community/sqlite`, chosen by measurement
+(`git show androidtv/main:docs/android-port/epg-storage-load-test.md`: 1M rows,
+JS heap flat at 20 MB).
+
+Design points that are load-bearing rather than stylistic:
+
+- **Streaming SAX parse, emitting in 500-row batches.** Collecting a million
+  programmes before writing would trade the flat heap for hundreds of MB.
+- **Multi-row `INSERT ... VALUES`.** Bridge crossings dominate; one statement
+  per batch instead of 500 round trips.
+- **Indexes dropped for the import and rebuilt after** — maintaining them per
+  row costs far more than the measured 14 s rebuild. Rebuilt on failure too, or
+  every later query would scan.
+- **Never wrap the column in `datetime()`, and bound the window on both sides.**
+  Confirmed on-device with `EXPLAIN QUERY PLAN`: our shape reports
+  `SEARCH ... USING INDEX idx_epg_programs_channel`, the `datetime()` form
+  reports `SCAN`.
+- **`connection.execute` takes one statement at a time.** The plugin's own
+  multi-statement splitter does not survive statements spanning several lines:
+  a semicolon-joined batch of three `CREATE TABLE`s created only the first, and
+  failed silently — the missing tables surfaced much later as "no such table".
+
+Both query-shape findings apply to the desktop code as well.
 
 ## Portal Transport
 
