@@ -11,6 +11,9 @@
  * behaviour. The worst case if the markup changes is that nothing collapses.
  */
 
+/** The navigation rail, which is an `<aside>` as well. */
+const RAIL_SELECTOR = 'aside.app-rail';
+
 export type TvRegion = 'rail' | 'context' | 'content';
 
 /** Set on the document element; the stylesheet keys off it. */
@@ -24,15 +27,16 @@ export const REGION_ATTRIBUTE = 'data-tv-region';
  * `main` first: the content area must win when landmarks nest, since collapsing
  * a panel that contains the focus would pull the ground out from under the user.
  *
- * `nav` before `aside`, because the rail is itself an `<aside>` wrapping its
- * `<nav>` links. Testing `aside` first put every rail item in the context
- * region and collapsed the rail instead of the category column.
+ * The rail is matched by class before any `<aside>` test, because it is itself
+ * an `<aside>`. Matching on `<nav>` alone was not enough: the brand link at the
+ * top of the rail sits outside the `<nav>`, so landing on it reported the
+ * context region and the rail refused to expand.
  */
 export function resolveRegion(element: Element): TvRegion {
     if (element.closest('main')) {
         return 'content';
     }
-    if (element.closest('nav')) {
+    if (element.closest(RAIL_SELECTOR) || element.closest('nav')) {
         return 'rail';
     }
     if (element.closest('aside')) {
@@ -49,6 +53,7 @@ export function resolveRegion(element: Element): TvRegion {
  * so a bare `aside` selector would collapse the navigation rail as well.
  */
 const CONTEXT_PANEL_SELECTOR = 'aside.context-panel';
+
 
 export function getContextPanel(): HTMLElement | null {
     return document.querySelector<HTMLElement>(CONTEXT_PANEL_SELECTOR);

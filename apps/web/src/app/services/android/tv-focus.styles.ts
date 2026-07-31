@@ -30,6 +30,7 @@ const TV_FOCUS_CSS = `
     --tv-selected-fill: rgba(255, 255, 255, 0.1);
     --tv-focus-radius: 8px;
     --tv-collapsed-panel: 0px;
+    --tv-rail-expanded: 210px;
 }
 
 /*
@@ -117,6 +118,58 @@ const TV_FOCUS_CSS = `
 
 [data-tv-nav] aside.context-panel {
     transition: max-width 180ms ease-out !important;
+}
+
+/*
+ * The rail is the mirror image: it earns its labels while it is being used and
+ * gives the width back the moment focus leaves.
+ *
+ * The labels are synthesised from \`aria-label\`, because there is nothing to
+ * reveal — the links hold an icon and an accessible name, with no visible text
+ * node anywhere. That also means the wording is whatever the accessible name
+ * says ("Open dashboard" rather than "Dashboard"); shortening it belongs in the
+ * component, not in an override layer.
+ */
+/*
+ * The shell is a grid whose first column is pinned at 60px. Widening the rail
+ * element alone changed nothing visible: it simply overflowed its cell and was
+ * painted underneath the next column, so the labels appeared clipped to two
+ * characters. The column is what has to grow.
+ */
+[data-tv-nav] div.workspace-shell {
+    transition: grid-template-columns 180ms ease-out !important;
+}
+
+[data-tv-nav][${REGION_ATTRIBUTE}="rail"] div.workspace-shell {
+    grid-template-columns: var(--tv-rail-expanded) 1fr !important;
+}
+
+[data-tv-nav][${REGION_ATTRIBUTE}="rail"] aside.app-rail {
+    width: 100% !important;
+    max-width: none !important;
+}
+
+[data-tv-nav][${REGION_ATTRIBUTE}="rail"] aside.app-rail nav {
+    width: 100% !important;
+}
+
+[data-tv-nav][${REGION_ATTRIBUTE}="rail"] aside.app-rail a[aria-label],
+[data-tv-nav][${REGION_ATTRIBUTE}="rail"] aside.app-rail button[aria-label] {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    justify-content: flex-start !important;
+    width: 100% !important;
+    padding-left: 10px !important;
+}
+
+[data-tv-nav][${REGION_ATTRIBUTE}="rail"] aside.app-rail a[aria-label]::after,
+[data-tv-nav][${REGION_ATTRIBUTE}="rail"] aside.app-rail button[aria-label]::after {
+    content: attr(aria-label);
+    font-size: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 `;
 

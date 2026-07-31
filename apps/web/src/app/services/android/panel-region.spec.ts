@@ -44,6 +44,16 @@ describe('panel region', () => {
         expect(resolveRegion(byId('link'))).toBe('rail');
     });
 
+    it('recognises rail items that sit outside its <nav>', () => {
+        // The brand link at the top of the rail is not inside the <nav>, so
+        // matching on <nav> alone reported the context region and the rail
+        // never expanded.
+        document.body.innerHTML =
+            '<aside class="app-rail"><a id="brand" aria-label="Open dashboard"></a><nav></nav></aside>';
+
+        expect(resolveRegion(byId('brand'))).toBe('rail');
+    });
+
     it('prefers content when landmarks nest', () => {
         // Collapsing a panel that contains the focus would pull the ground out
         // from under the user, so `main` has to win.
