@@ -93,6 +93,28 @@ export function isRegionCrossingAllowed(
     return (resolveRegion(origin) === 'rail') === (resolveRegion(target) === 'rail');
 }
 
+/**
+ * A category row in the context column (Live, Movies and Series all render
+ * their categories through the same `button.category-item`).
+ *
+ * These follow focus instead of waiting for OK: the column is a master list
+ * whose detail pane should track it, as on the benchmark. Scoped tightly on
+ * purpose — the panel header holds search/sort/refine buttons, and the rail
+ * holds section links, where activating on focus would fire searches and
+ * navigations merely because the focus passed by.
+ */
+export function isContextCategoryItem(element: Element): boolean {
+    return (
+        element.matches('button.category-item') &&
+        element.closest(CONTEXT_PANEL_SELECTOR) !== null
+    );
+}
+
+/** Whether this category is already the active one — re-clicking it reloads. */
+export function isAlreadySelectedCategory(element: Element): boolean {
+    return element.getAttribute('aria-current') === 'true';
+}
+
 export function applyRegion(element: Element): void {
     const region = resolveRegion(element);
     document.documentElement.setAttribute(REGION_ATTRIBUTE, region);

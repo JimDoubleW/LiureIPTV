@@ -1,6 +1,8 @@
 import {
     applyRegion,
     expandContext,
+    isAlreadySelectedCategory,
+    isContextCategoryItem,
     isRegionCrossingAllowed,
     REGION_ATTRIBUTE,
     resolveRegion,
@@ -112,6 +114,38 @@ describe('panel region', () => {
             document.body.innerHTML = '<main></main>';
 
             expect(expandContext()).toBeNull();
+        });
+    });
+
+    describe('isContextCategoryItem', () => {
+        beforeEach(() => {
+            document.body.innerHTML = `
+                <aside class="context-panel">
+                    <button id="refine" class="mdc-button">Refine</button>
+                    <button id="cat" class="nav-item category-item">FR TV HD</button>
+                    <button id="active" class="nav-item category-item" aria-current="true">Favoris</button>
+                </aside>
+                <aside class="app-rail"><nav><a id="rail-link" class="category-item" href="#"></a></nav></aside>
+            `;
+        });
+
+        it('recognises a category row in the context column', () => {
+            expect(isContextCategoryItem(byId('cat'))).toBe(true);
+        });
+
+        it('excludes the panel header buttons', () => {
+            // Auto-activating Refine or search on focus would open dialogs
+            // merely because focus passed by.
+            expect(isContextCategoryItem(byId('refine'))).toBe(false);
+        });
+
+        it('excludes anything outside the context column', () => {
+            expect(isContextCategoryItem(byId('rail-link'))).toBe(false);
+        });
+
+        it('reports the active category so it is not re-clicked', () => {
+            expect(isAlreadySelectedCategory(byId('active'))).toBe(true);
+            expect(isAlreadySelectedCategory(byId('cat'))).toBe(false);
         });
     });
 

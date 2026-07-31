@@ -10,6 +10,8 @@ import {
     expandContext,
     getContextPanel,
     getLastContextFocus,
+    isAlreadySelectedCategory,
+    isContextCategoryItem,
     isRegionCrossingAllowed,
     noteContextFocus,
     resolveRegion,
@@ -79,6 +81,36 @@ function applyFocus(element: HTMLElement): void {
     memory.remember(element);
     noteContextFocus(element);
     applyRegion(element);
+    scheduleAutoSelect(element);
+}
+
+/**
+ * Categories follow focus — no OK needed. Debounced so that traversing the
+ * column on the way somewhere else does not load every category it passes,
+ * and skipped when the row is already the active category, because re-clicking
+ * it reloads content for nothing (returning into the column via position
+ * memory would otherwise reload on every visit).
+ */
+const AUTO_SELECT_DELAY_MS = 300;
+let autoSelectTimer: ReturnType<typeof setTimeout> | undefined;
+
+function scheduleAutoSelect(element: HTMLElement): void {
+    if (autoSelectTimer !== undefined) {
+        clearTimeout(autoSelectTimer);
+        autoSelectTimer = undefined;
+    }
+
+    if (!isContextCategoryItem(element) || isAlreadySelectedCategory(element)) {
+        return;
+    }
+
+    autoSelectTimer = setTimeout(() => {
+        autoSelectTimer = undefined;
+        // Only if focus settled here; it may have moved on during the delay.
+        if (currentElement() === element) {
+            element.click();
+        }
+    }, AUTO_SELECT_DELAY_MS);
 }
 
 /** First focusable thing on screen, used when nothing holds focus yet. */
