@@ -60,6 +60,13 @@ public class MainActivity extends BridgeActivity {
             case KeyEvent.KEYCODE_DPAD_CENTER:
             case KeyEvent.KEYCODE_ENTER:
                 return "ok";
+            case KeyEvent.KEYCODE_BACK:
+                // From a list, the default chain finished the activity instead
+                // of stepping back through the app's own history. JS closes an
+                // open overlay first, then walks history, and only at the real
+                // root minimizes the app. While the IME is visible this case is
+                // never reached and the system closes the keyboard as usual.
+                return "back";
             default:
                 return null;
         }
