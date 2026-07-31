@@ -22,7 +22,19 @@ export class RuntimeCapabilitiesService {
     }
 
     get isElectron(): boolean {
-        return !!this.electronBridge;
+        // The Android shell installs a partial, EPG-only bridge at
+        // window.electron so the per-method capability probes below can light
+        // up the EPG paths. That does not make the environment Electron: the
+        // data service stays PwaService, and isPwa-derived capabilities (e.g.
+        // supportsXtreamSectionNavigation) must keep answering as the PWA.
+        return !!this.electronBridge && !this.isAndroidShell;
+    }
+
+    private get isAndroidShell(): boolean {
+        const capacitor = (
+            globalThis as { Capacitor?: { getPlatform?: () => string } }
+        ).Capacitor;
+        return capacitor?.getPlatform?.() === 'android';
     }
 
     get isPwa(): boolean {

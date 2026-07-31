@@ -2,11 +2,15 @@ import { bootstrapApplication } from '@angular/platform-browser';
 import { registerAppDateLocales } from './app/app-date-locales';
 import { AppComponent } from './app/app.component';
 import { appConfig } from './app/app.config';
+import { installAndroidEpgBridge } from './app/services/android/android-epg-bridge';
 import { armTvNavigation } from './app/services/android/tv-navigation';
 
 registerAppDateLocales();
 
-// D-pad navigation for the Android TV port; a no-op off the Capacitor shell.
+// Android TV port hooks; both no-op off the Capacitor shell. The EPG bridge
+// must install before bootstrap so DataFactory() and the capability probes see
+// a consistent world from the first injection.
+installAndroidEpgBridge();
 armTvNavigation();
 
 bootstrapApplication(AppComponent, appConfig)

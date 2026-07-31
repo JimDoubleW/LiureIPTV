@@ -42,6 +42,7 @@ import {
 } from './services/portal-navigation-actions.service';
 import { providePortalPlaybackPositions } from './services/portal-playback-positions.service';
 import { PwaService } from './services/pwa.service';
+import { isAndroidRuntime } from './services/android/android-runtime';
 import { PortalDirectInterceptor } from './services/android/portal-direct.interceptor';
 import { shouldEnableServiceWorker } from './services/runtime-config';
 import { provideWorkspaceShellActions } from './services/workspace-shell-actions.service';
@@ -98,7 +99,12 @@ export function getInitialLanguage(): string {
  * Conditionally provides the necessary service based on the current environment
  */
 export function DataFactory() {
-    if (window.electron) {
+    // The Android shell installs a partial, EPG-only bridge at window.electron
+    // (see services/android/android-epg-bridge.ts). It exists so the
+    // per-method capability probes light up the EPG paths — not to impersonate
+    // Electron: ElectronService would call dozens of IPC methods the bridge
+    // does not have.
+    if (window.electron && !isAndroidRuntime()) {
         return inject(ElectronService);
     }
     return inject(PwaService);

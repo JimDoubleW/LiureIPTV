@@ -315,6 +315,38 @@ Progressive collapse is driven by `panel-region.ts`, which publishes
 than to zero on purpose: a zero-width panel has zero-sized children, candidate
 collection drops them, and left would have nothing to move to.
 
+## EPG
+
+Capabilities are duck-typed: `RuntimeCapabilitiesService` asks "is
+`window.electron.fetchEpg` a function?", never "is this Electron?". The shell
+exploits that with a **partial, EPG-only bridge** installed at `window.electron`
+before bootstrap (`services/android/android-epg-bridge.ts`). It lights up the
+EPG paths and nothing else, because every other capability probes for methods
+the bridge deliberately lacks.
+
+Two injection points carry an explicit Android exception, and both are
+load-bearing — a truthy `window.electron` would otherwise select
+`ElectronService` (which calls dozens of IPC methods that do not exist) and
+relabel the environment as Electron:
+
+- `DataFactory()` in `apps/web/src/app/app.config.ts`
+- `RuntimeCapabilitiesService.isElectron`
+
+**Stage 1 (done).** The Xtream EPG's primary source is the portal API
+(`get_short_epg`), which already rides the native HTTP transport — the app was
+simply refusing to ask, because the UI gates the whole path behind
+`supportsEpg`. Programme titles, times and live progress bars now render in the
+channel list. Manual channel mappings are real and persist in `localStorage`.
+
+**Stage 2 (not started): XMLTV import and storage.** The bridge's XMLTV surface
+is empty *and says so* — lookups return no rows, imports report every URL as
+`skipped`, freshness reports everything stale. Claiming success would corrupt
+the freshness bookkeeping. The measured route is SQLite in the WebView: see
+`git show androidtv/main:docs/android-port/epg-storage-load-test.md` — 1M rows
+with the JS heap flat at 20 MB, plus two query-shape findings that also apply
+to the desktop code (never wrap the column in `datetime()`; bound the time
+window).
+
 ## Portal Transport
 
 Portal traffic bypasses the proxy through `PortalDirectInterceptor`
