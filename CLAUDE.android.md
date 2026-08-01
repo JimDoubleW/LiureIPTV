@@ -162,6 +162,66 @@ falling back to the generic `<nav>`/`<aside>` walk, and `panel-region.ts` tags
 rail into a single memory slot, matching the mental model of "one vertical
 list", not several independent panels.
 
+## Fixed Bug: Settings sections aliased to one shared position memory
+
+Reported by the user: selecting EPG in Settings then pressing RIGHT could show
+unrelated content from a different section (Metadata) instead of EPG's own,
+and separately — asked directly — Settings had no real per-section memory at
+all.
+
+Root cause: all eight Settings sections (General, Playback, EPG, Dashboard,
+Metadata, Backup, Reset, About) render inside one shared scrollable zone
+(`MAIN.workspace-content`, `scrollHeight 5496 / clientHeight 484`). Clicking a
+category anchor-scrolls that SAME zone to a different section without
+detaching or resizing anything, so `ZoneMemory.recall()`'s existing checks
+(attached, non-zero size) both still passed for an element remembered from a
+previous section, and there was only ever one memory slot for the whole page.
+
+Two-part fix in `focus-zones.ts`: `recall()` now also requires the remembered
+element to still intersect the viewport (attached-and-sized is not the same
+as "still what's on screen" when one zone shows several sections one at a
+time by scrolling itself rather than mounting/unmounting); and the landmark
+selector now includes `section.settings-group` so each of the eight sections
+resolves to its own zone — no `data-tv-zone` attribute needed, since
+`zoneIdFor`'s WeakMap fallback already assigns distinct ids to distinct DOM
+nodes. Verified on the reference device: EPG and Metadata now keep
+independent remembered positions instead of aliasing to one shared slot.
+
+## Fixed Bug: settings save silently failing on a rebounded remote
+
+Reported by the user as a genuine, reproducible failure in normal use (not a
+side effect of ADB testing, which was the first — wrong — hypothesis):
+"Settings could not be saved. Your changes will be lost when the app is
+restarted." First suspected to be from repeated `am force-stop` calls during
+testing, but the user explicitly rejected that: the same banner blocks saving
+config in ordinary use.
+
+Two contributing gaps found while chasing this, both in the settings save
+path:
+
+1. `SettingsFormFacade.save()` had no re-entrancy guard. `MainActivity`'s
+   `dispatchKeyEvent` fires `window.__tvKeyDispatch('ok')` once per
+   `ACTION_DOWN` with `repeatCount == 0` — correct per the Android key-event
+   contract — but a physical remote's IR receiver reporting one press as two
+   discrete `ACTION_DOWN` events (a real possibility with cheap TV-box
+   remotes) would still reach the app as two separate `'ok'` dispatches,
+   firing two concurrent writes of the same form to IndexedDB.
+2. `SettingsStore.updateSettings()` treated any single `storage.set()`
+   rejection as final. `@ngx-pwa/local-storage`'s `IndexedDBDatabase` opens
+   its connection once at construction and latches that outcome permanently
+   in a `ReplaySubject`, but each `set()`/`get()` call still opens its own
+   fresh transaction — so a single transient hiccup (the Android WebView
+   backing store under load) only ever broke that one call, and a plain retry
+   moments later reliably succeeded when reproduced on the reference device.
+
+Fix: `SettingsFormFacade.save()` now ignores a second call while the first is
+still in flight (`isSaving` flag, released in a `finally`), and
+`SettingsStore.updateSettings()` retries once after a 200ms pause before
+surfacing `storageFailure('save')`. Regression coverage:
+`settings-form.facade.spec.ts` (concurrent-save guard) and
+`settings-store.service.spec.ts` (`'recovers from a single transient save
+failure without surfacing it'`).
+
 ## TV Interaction Reference
 
 D-pad behaviour, the four surfaces, the measured focus palette and the adoption

@@ -342,8 +342,27 @@ describe('SettingsStore storage failure reporting', () => {
         expect(store.getSettings().language).toBe(Language.ENGLISH);
     });
 
-    it('flags a failed save and rethrows instead of silently keeping the in-memory change', async () => {
+    it('recovers from a single transient save failure without surfacing it', async () => {
+        // A lone IndexedDB write can fail even on a healthy connection — the
+        // Android WebView backing store hiccupping under load, confirmed on
+        // the reference device by an identical retry succeeding moments
+        // later. One retry is what keeps a blip like that from reaching the
+        // user as "settings could not be saved".
         storage.set.mockImplementationOnce(() => {
+            throw new Error('transient backing store error');
+        });
+        const store = injector.get(SettingsStore);
+        await store.loadSettings();
+
+        await store.updateSettings({ language: Language.FRENCH });
+
+        expect(storage.set).toHaveBeenCalledTimes(2);
+        expect(store.storageFailure()).toBeNull();
+        expect(store.getSettings().language).toBe(Language.FRENCH);
+    });
+
+    it('flags a failed save and rethrows instead of silently keeping the in-memory change', async () => {
+        storage.set.mockImplementation(() => {
             throw new Error('quota exceeded');
         });
         const store = injector.get(SettingsStore);
@@ -353,6 +372,7 @@ describe('SettingsStore storage failure reporting', () => {
             store.updateSettings({ language: Language.FRENCH })
         ).rejects.toThrow('quota exceeded');
 
+        expect(storage.set).toHaveBeenCalledTimes(2);
         expect(store.storageFailure()).toBe('save');
         // The in-memory patch still applied — that is exactly why the flag
         // matters: the UI shows French but nothing reached disk.
@@ -360,7 +380,7 @@ describe('SettingsStore storage failure reporting', () => {
     });
 
     it('clears the failure once a later save succeeds', async () => {
-        storage.set.mockImplementationOnce(() => {
+        storage.set.mockImplementation(() => {
             throw new Error('quota exceeded');
         });
         const store = injector.get(SettingsStore);
@@ -371,6 +391,7 @@ describe('SettingsStore storage failure reporting', () => {
         ).rejects.toThrow('quota exceeded');
         expect(store.storageFailure()).toBe('save');
 
+        storage.set.mockImplementation(() => of(undefined));
         await store.updateSettings({ language: Language.GERMAN });
 
         expect(store.storageFailure()).toBeNull();

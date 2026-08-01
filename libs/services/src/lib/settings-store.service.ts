@@ -133,6 +133,14 @@ export const SettingsStore = signalStore(
     withMethods((store, storage = inject(StorageMap)) => {
         let settingsLoadPromise: Promise<void> | undefined;
 
+        async function persist(completeSettings: Settings): Promise<void> {
+            await firstValueFrom(storage.set(STORE_KEY.Settings, completeSettings));
+            patchState(store, { storageFailure: null });
+            if (completeSettings.player === VideoPlayer.EmbeddedMpv) {
+                scheduleEmbeddedMpvPrepare();
+            }
+        }
+
         return {
             loadSettings() {
                 if (settingsLoadPromise) {
@@ -196,19 +204,25 @@ export const SettingsStore = signalStore(
                 // Save the complete settings object, not just the partial update
                 const completeSettings = this.getSettings();
                 try {
-                    await firstValueFrom(
-                        storage.set(STORE_KEY.Settings, completeSettings)
-                    );
-                    patchState(store, { storageFailure: null });
-                    if (completeSettings.player === VideoPlayer.EmbeddedMpv) {
-                        scheduleEmbeddedMpvPrepare();
+                    await persist(completeSettings);
+                } catch {
+                    // A single IndexedDB write can fail transiently (the
+                    // Android WebView backing store hiccupping under load) even
+                    // though the connection itself is healthy — confirmed on
+                    // the reference device, where an identical retry moments
+                    // later succeeded outright. One retry absorbs that blip
+                    // before surfacing a failure the user cannot act on.
+                    await new Promise((resolve) => setTimeout(resolve, 200));
+                    try {
+                        await persist(completeSettings);
+                    } catch (error) {
+                        console.error('Failed to save settings:', error);
+                        // The in-memory patch above already applied, so
+                        // without this flag the change looks saved until the
+                        // next restart.
+                        patchState(store, { storageFailure: 'save' });
+                        throw error;
                     }
-                } catch (error) {
-                    console.error('Failed to save settings:', error);
-                    // The in-memory patch above already applied, so without
-                    // this flag the change looks saved until the next restart.
-                    patchState(store, { storageFailure: 'save' });
-                    throw error;
                 }
             },
 

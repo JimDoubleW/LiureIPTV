@@ -38,6 +38,14 @@ export class SettingsFormFacade {
     private readonly settingsStore = inject(SettingsStore);
     private readonly translate = inject(TranslateService);
 
+    /**
+     * Guards against a second `save()` racing the first — a D-pad OK press
+     * that the remote's IR receiver reports twice for one physical click
+     * (confirmed as a real possibility on the reference remote) would
+     * otherwise fire two concurrent writes of the same form to storage.
+     */
+    private isSaving = false;
+
     readonly supportsEpg =
         this.epgBridge.supportsImport && this.epgBridge.supportsDataManagement;
 
@@ -156,23 +164,32 @@ export class SettingsFormFacade {
      * notified, so the UI confirmation is not delayed by IPC
      */
     async save(onSaved: () => void): Promise<void> {
-        const settings = createSettingsFromFormValue(
-            this.form,
-            this.settingsStore.getSettings()
-        );
-
-        await this.settingsStore.updateSettings(settings);
-        onSaved();
-
-        if (!window.electron) {
+        if (this.isSaving) {
             return;
         }
+        this.isSaving = true;
 
-        window.electron.updateSettings(settings);
+        try {
+            const settings = createSettingsFromFormValue(
+                this.form,
+                this.settingsStore.getSettings()
+            );
 
-        if (this.runtime.supportsExternalPlayerPathSettings) {
-            window.electron.setMpvPlayerPath(settings.mpvPlayerPath);
-            window.electron.setVlcPlayerPath(settings.vlcPlayerPath);
+            await this.settingsStore.updateSettings(settings);
+            onSaved();
+
+            if (!window.electron) {
+                return;
+            }
+
+            window.electron.updateSettings(settings);
+
+            if (this.runtime.supportsExternalPlayerPathSettings) {
+                window.electron.setMpvPlayerPath(settings.mpvPlayerPath);
+                window.electron.setVlcPlayerPath(settings.vlcPlayerPath);
+            }
+        } finally {
+            this.isSaving = false;
         }
     }
 
