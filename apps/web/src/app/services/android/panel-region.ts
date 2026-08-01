@@ -71,12 +71,11 @@ export function resolveRegion(element: Element): TvRegion {
  * key — the moment focus had last resolved to the 'content' region (which
  * happens almost immediately on most pages). `:has(.category-item)` scopes
  * this to the one screen where collapsing is actually the intended,
- * TiviMate-derived behaviour: `.category-item` is the class the Live/VOD/
+ * reference-player-derived behaviour: `.category-item` is the class the Live/VOD/
  * Series category rows render with (`workspace-context-category-view`),
  * which Settings does not use.
  */
 const CONTEXT_PANEL_SELECTOR = 'aside.context-panel:has(.category-item)';
-
 
 export function getContextPanel(): HTMLElement | null {
     return document.querySelector<HTMLElement>(CONTEXT_PANEL_SELECTOR);
@@ -113,7 +112,10 @@ export function isRegionCrossingAllowed(
         return true;
     }
 
-    return (resolveRegion(origin) === 'rail') === (resolveRegion(target) === 'rail');
+    return (
+        (resolveRegion(origin) === 'rail') ===
+        (resolveRegion(target) === 'rail')
+    );
 }
 
 /**

@@ -5,7 +5,7 @@ import { ChannelDrm, ChannelDrmClearKeys } from '@iptvnator/shared/interfaces';
  *
  * The playlist parser does not understand `#KODIPROP:` lines, but it appends
  * every unknown line between `#EXTINF` and the stream URL to `item.raw`
- * (the dominant Kodi/TiviMate layout). This module post-processes that raw
+ * (the dominant Kodi-style layout). This module post-processes that raw
  * block into a typed {@link ChannelDrm} value.
  *
  * Supported properties:
@@ -81,9 +81,7 @@ export function extractDrmFromRaw(
     };
 }
 
-function collectKodipropValues(
-    raw: string | undefined
-): Map<string, string> {
+function collectKodipropValues(raw: string | undefined): Map<string, string> {
     const props = new Map<string, string>();
     if (!raw) {
         return props;

@@ -1,7 +1,7 @@
 import type { TvDirection } from './spatial-geometry';
 
 /**
- * The playback side of the TiviMate key contract.
+ * The playback side of the reference-player key contract.
  *
  * The benchmark's OK is a two-step gesture: the first press on a channel tunes
  * it while the list survives, the second — on the now-playing channel —

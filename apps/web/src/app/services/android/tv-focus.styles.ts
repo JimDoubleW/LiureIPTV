@@ -4,7 +4,7 @@ import { TV_FULLSCREEN_ATTRIBUTE } from './player-keys';
 import { VIRTUAL_FOCUS_ATTRIBUTE } from './virtual-focus';
 
 /**
- * The three focus states, measured off the TiviMate benchmark.
+ * The three focus states, measured off the reference-player benchmark.
  * See docs/android-port/tv-navigation-reference.md.
  *
  * | state                   | rendering                                  |

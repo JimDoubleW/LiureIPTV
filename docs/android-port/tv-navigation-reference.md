@@ -1,6 +1,6 @@
 # TV Navigation Reference
 
-Interaction patterns observed on TiviMate (`ar.tvplayer.tv`) running on the
+Interaction patterns observed on a reference IPTV player app running on the
 reference device (Xiaomi TV Box S 3rd Gen, Android TV 14, 1920×1080 @ density
 320 → **960×540 dp** of logical surface), used as a benchmark for the Android TV
 port.
@@ -62,9 +62,10 @@ and remaining time ("23 min").
 `BACK` from playback opens an opaque guide:
 
 - **nav rail** — collapsed to a ~56 dp icon strip when unfocused; **expands to
-  ~220 dp with labels when focused** (`tivimate`, Rechercher, TV, Films, Séries,
-  Enregistrements, Ma liste, and Paramètres pinned at the bottom). Expanding
-  pushes the whole content right, and the grid visibly loses time slots.
+  ~220 dp with labels when focused** (the app's own home entry, Rechercher, TV,
+  Films, Séries, Enregistrements, Ma liste, and Paramètres pinned at the
+  bottom). Expanding pushes the whole content right, and the grid visibly loses
+  time slots.
 - **groups column** — the same list as in the overlay.
 - **timeline grid** — channels as rows, time as columns, a ruler
   (`ven. 31 juil., 16:45 | 16:30 | 17:00`) and a blue vertical *now* line.
@@ -191,9 +192,9 @@ commits to fullscreen.
 
 This is the single most important interaction to copy, because it inverts the
 web reflex. In our app, activating a channel navigates and destroys the list. In
-TiviMate the first activation **previews in place** and the list survives, so
-comparing three channels costs three presses instead of three round trips
-through a route.
+the reference player the first activation **previews in place** and the list
+survives, so comparing three channels costs three presses instead of three
+round trips through a route.
 
 The unifying rule across all three rows: **`OK` advances one step deeper; when
 the focused item is already the active one, `OK` commits to the deepest state.**

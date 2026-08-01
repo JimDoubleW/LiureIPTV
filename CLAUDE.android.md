@@ -61,8 +61,8 @@ million-row week of guide data with the JS heap flat at 20 MB):
 git show androidtv/main:docs/android-port/epg-storage-load-test.md
 ```
 
-The TiviMate interaction benchmark was **re-observed on the device for this
-branch** and lives here: [`docs/android-port/tv-navigation-reference.md`](./docs/android-port/tv-navigation-reference.md).
+The reference-player interaction benchmark was **re-observed on the device for
+this branch** and lives here: [`docs/android-port/tv-navigation-reference.md`](./docs/android-port/tv-navigation-reference.md).
 Prefer it over the `androidtv/main` copy, which is less accurate.
 
 ## Fixed Bug: mat-select dropdowns unusable from a remote
@@ -247,6 +247,55 @@ code that checks `window.electron` truthiness instead of
 `RuntimeCapabilitiesService.isElectron` is a latent Android bug — the two are
 no longer equivalent since the EPG bridge shipped, and grepping for `!window.electron`/`window.electron &&` outside `RuntimeCapabilitiesService`
 is worth doing next time this class of report comes back.
+
+## Fixed Bug: Xtream favorites and recent items silently failing on Android
+
+Follow-up sweep after the settings-save bug above, grepping the codebase for
+the same `window.electron` truthiness trap outside `RuntimeCapabilitiesService`.
+Found two more real instances, both in the Xtream `signalStoreFeature`s that
+back the per-playlist favorites and recently-viewed lists — reachable any time
+a user favorites something or clears watch history, since Xtream is the
+portal type this port actually routes (see Portal Transport above).
+
+`with-favorites.feature.ts` (`toggleFavorite`, `checkFavoriteStatus`) and
+`with-recent-items.ts` (`addRecentItem`) all resolve a `contentId` as
+`content?.id ?? (!window.electron ? normalizedXtreamId : null)`. On Android,
+`XTREAM_DATA_SOURCE` resolves to `PwaXtreamDataSource` (per-method capability
+probes in `supportsXtreamSqliteDataSource` correctly see through the EPG-only
+bridge), which returns `null` from `getContentByXtreamId` whenever an item
+isn't already hydrated in the in-memory cache — normal on a cold list. The
+Xtream-ID fallback exists for exactly this case, but `!window.electron` reads
+false on Android, so the fallback resolved to `null` instead, and
+`toggleFavorite`/`addRecentItem` silently no-op'd (logged, no visible error)
+instead of favoriting or recording the item.
+
+`with-recent-items.ts` (`clearRecentItems`, `clearGlobalRecentlyViewed`) had
+the same trap in the other direction: `if (window.electron) { await
+dbService.clear...() }` took the DB-backed branch on Android instead of the
+`dataSource.clearRecentItems()` branch that actually owns the PWA in-memory
+cache. `dbService`'s methods are internally guarded
+(`typeof window.electron?.dbClearPlaylistRecentItems !== 'function'`), so
+this didn't throw — it just silently cleared nothing, leaving "Clear recently
+viewed" a no-op on Android with no error surfaced.
+
+Fix: both files now `inject(RuntimeCapabilitiesService)` and gate on
+`runtime.isElectron` instead of raw `window.electron` truthiness, same
+pattern as the settings-save fix. Regression coverage: `describe('withFavorites
+on the Android partial bridge', ...)` in `with-favorites.feature.spec.ts` and
+`describe('withRecentItems on the Android partial bridge', ...)` in
+`with-recent-items.feature.spec.ts`, both setting `window.electron` to an
+EPG-methods-only stub plus the Android Capacitor flag.
+
+Swept the rest of the codebase for the same shape (`grep` for bare
+`window.electron`/`!window.electron` outside
+`apps/web/src/app/services/android/**`) and reviewed every hit: everything
+else already either checks a specific method
+(`typeof window.electron?.methodName === 'function'`, which duck-types
+correctly through the EPG-only bridge) or is genuinely Electron-only
+functionality not reachable on Android (Embedded MPV, the global-favorites
+Xtream aggregation page, which already returns `[]` via a doubly-guarded
+`DatabaseService` call and has no other path to populate an Xtream row on
+Android). Nothing else in that sweep changed behavior.
 
 ## TV Interaction Reference
 

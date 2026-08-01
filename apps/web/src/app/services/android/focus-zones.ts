@@ -1,7 +1,7 @@
 /**
  * Per-panel focus memory.
  *
- * The single rule taken from the TiviMate benchmark: every panel keeps its own
+ * The single rule taken from the reference-player benchmark: every panel keeps its own
  * selection marked, and only the focused panel promotes that selection to the
  * bright pill. Returning to a panel returns you where you were.
  *
