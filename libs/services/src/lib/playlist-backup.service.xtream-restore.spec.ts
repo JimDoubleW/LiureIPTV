@@ -164,3 +164,44 @@ describe('PlaylistBackupService Xtream hidden categories (issue #1017)', () => {
         );
     });
 });
+
+describe('PlaylistBackupService export on the Android partial bridge', () => {
+    // window.electron is truthy on Android too — android-epg-bridge.ts
+    // installs a partial, EPG-only bridge so duck-typed capability probes
+    // light up EPG paths, but it has none of the dbXxx methods
+    // DatabaseService.getAllXtreamCategories calls unconditionally.
+    // hasElectronApi() used to gate on bare `window.electron` truthiness
+    // instead of runtime.isElectron, so it took the Electron branch on
+    // Android and called straight into the missing method — confirmed on
+    // the reference device: exporting a backup with an Xtream playlist threw
+    // "window.electron.dbGetAllCategories is not a function" and surfaced as
+    // a generic export-failed snackbar.
+    const electronWindow = window as unknown as { electron?: unknown };
+
+    beforeEach(() => {
+        electronWindow.electron = { fetchEpg: jest.fn() };
+    });
+
+    afterEach(() => {
+        delete electronWindow.electron;
+        jest.restoreAllMocks();
+        localStorage.clear();
+    });
+
+    it('exports an Xtream playlist without calling the missing DB methods', async () => {
+        const collaborators = createRestoreCollaborators();
+        const service = createPlaylistBackupService({
+            ...collaborators,
+            runtime: { isElectron: false },
+        });
+
+        const backup = await service.exportBackup();
+
+        const entry = backup.manifest
+            .playlists[0] as XtreamPlaylistBackupEntry;
+        expect(entry.userState.hiddenCategories).toEqual([]);
+        expect(
+            collaborators.databaseService.getAllXtreamCategories
+        ).not.toHaveBeenCalled();
+    });
+});

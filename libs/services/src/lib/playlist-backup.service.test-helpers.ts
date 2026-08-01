@@ -103,6 +103,12 @@ export function createPlaylistBackupService(
             getSettings: jest.fn(() => ({ epgUrl: [] })),
             updateSettings: jest.fn().mockResolvedValue(undefined),
         },
+        // Every spec using these defaults predates the Android port and
+        // exercises the Electron-backed DB path deliberately (that's what
+        // `databaseService` below stands in for), so the default matches:
+        // only a spec explicitly testing the non-Electron branch overrides
+        // this to `false`.
+        runtime: { isElectron: true },
         databaseService: {
             getAllXtreamCategories: jest.fn().mockResolvedValue([]),
             getFavorites: jest.fn().mockResolvedValue([]),

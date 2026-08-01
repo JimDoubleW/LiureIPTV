@@ -3,6 +3,7 @@ import { firstValueFrom } from 'rxjs';
 import { PlaylistsService } from './playlists.service';
 import { SettingsStore } from './settings-store.service';
 import { DatabaseService } from './database-electron.service';
+import { RuntimeCapabilitiesService } from './runtime-capabilities.service';
 import { VodSourcePinService } from './vod-source-pin.service';
 import { PlaybackPositionService } from './playback-position.service';
 import { XtreamPendingRestoreService } from './xtream-pending-restore.service';
@@ -60,6 +61,7 @@ export class PlaylistBackupService {
     private readonly playlistsService = inject(PlaylistsService);
     private readonly settingsStore = inject(SettingsStore);
     private readonly databaseService = inject(DatabaseService);
+    private readonly runtime = inject(RuntimeCapabilitiesService);
     private readonly playbackPositionService = inject(PlaybackPositionService);
     private readonly vodSourcePinService = inject(VodSourcePinService);
     private readonly pendingRestoreService = inject(
@@ -1162,7 +1164,17 @@ export class PlaylistBackupService {
         return error instanceof Error ? error.message : String(error);
     }
 
+    // window.electron is truthy on Android too — android-epg-bridge.ts
+    // installs a partial, EPG-only bridge so duck-typed capability probes
+    // light up EPG paths, but it has none of the dbXxx methods DatabaseService
+    // calls unconditionally. Gating on bare presence instead of
+    // runtime.isElectron (already Android-aware) let buildXtreamEntry() and
+    // applyXtreamRestoreState() reach getAllXtreamCategories(), which calls
+    // window.electron.dbGetAllCategories directly with no guard of its own —
+    // confirmed on the reference device: exporting a playlist backup with an
+    // Xtream playlist threw "window.electron.dbGetAllCategories is not a
+    // function" and surfaced as a generic export-failed snackbar.
     private hasElectronApi(): boolean {
-        return !!(window as Window & { electron?: unknown }).electron;
+        return this.runtime.isElectron;
     }
 }
