@@ -65,6 +65,34 @@ The TiviMate interaction benchmark was **re-observed on the device for this
 branch** and lives here: [`docs/android-port/tv-navigation-reference.md`](./docs/android-port/tv-navigation-reference.md).
 Prefer it over the `androidtv/main` copy, which is less accurate.
 
+## Fixed Bug: Settings category list collapsed to 0×0
+
+The user reported the search bar "seemed to prevent navigation" into the
+Settings menu. It didn't — but something adjacent did, and it is worth reading
+before reusing `aside.context-panel` styling/collapse logic elsewhere.
+
+`aside.context-panel` is a shared workspace-shell wrapper, not something unique
+to Live/VOD/Series browsing. The Settings page's own category list
+(General/Playback/EPG/.../About) renders inside the identical wrapper class.
+The progressive-collapse feature (`panel-region.ts`, `tv-focus.styles.ts`) used
+to target that class unscoped, so as soon as focus had last resolved to the
+'content' region — which happens almost immediately on most pages — it
+collapsed the Settings category column to 0 width and marked it `inert`,
+taking it out of the focus order entirely. Confirmed on-device:
+`width=0 inert=true` on a fresh settings page load.
+
+Fix: both the CSS collapse rule and `getContextPanel()`'s selector are now
+`aside.context-panel:has(.category-item)`. `.category-item` is the class the
+Live/VOD/Series category rows actually render with
+(`workspace-context-category-view.component.html`); Settings' own
+`.settings-section-item` rows don't carry it, so the Settings panel is excluded
+from collapse/inert entirely and behaves like ordinary content. Verified on
+device: `width=284 inert=false`, and once positioned on a category
+(EPG/Playback/Dashboard/...), UP/DOWN walk the list correctly.
+
+`:has()` needed checking against jsdom (used by the unit tests): confirmed
+supported as of the workspace's jsdom 26.1.0.
+
 ## Fixed Bug: "Open settings" unreachable in the rail
 
 Root cause and fix are worth reading before touching `focus-zones.ts` or the

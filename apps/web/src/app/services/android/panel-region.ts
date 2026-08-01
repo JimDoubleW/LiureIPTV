@@ -60,10 +60,22 @@ export function resolveRegion(element: Element): TvRegion {
 }
 
 /**
- * The category column. Named explicitly because the rail is an `<aside>` too,
- * so a bare `aside` selector would collapse the navigation rail as well.
+ * The category column that browses Live/VOD/Series content.
+ *
+ * `aside.context-panel` is a shared workspace-shell wrapper, not something
+ * unique to that browsing screen: the Settings page's own category list
+ * (General/Playback/EPG/...) renders inside the exact same wrapper class. An
+ * earlier version of this selector collapsed and `inert`-ed whichever
+ * `aside.context-panel` happened to be on screen, which took the Settings
+ * category list down with it — down to a literal 0×0 rect, unreachable by any
+ * key — the moment focus had last resolved to the 'content' region (which
+ * happens almost immediately on most pages). `:has(.category-item)` scopes
+ * this to the one screen where collapsing is actually the intended,
+ * TiviMate-derived behaviour: `.category-item` is the class the Live/VOD/
+ * Series category rows render with (`workspace-context-category-view`),
+ * which Settings does not use.
  */
-const CONTEXT_PANEL_SELECTOR = 'aside.context-panel';
+const CONTEXT_PANEL_SELECTOR = 'aside.context-panel:has(.category-item)';
 
 
 export function getContextPanel(): HTMLElement | null {

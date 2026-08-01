@@ -128,10 +128,18 @@ const TV_FOCUS_CSS = `
  * panel-region.ts marks the collapsed panel \`inert\`, and tv-navigation.ts
  * unfolds it when the user presses left with nowhere else to go.
  *
- * The selector names the category column explicitly because the rail is an
- * \`<aside>\` too: a bare \`aside\` collapsed both, the rail included.
+ * Both rules are scoped with \`:has(.category-item)\`, not just \`aside.context-
+ * panel\`. That wrapper class is a shared workspace-shell component, not
+ * something unique to Live/VOD/Series browsing — Settings renders its own
+ * category list (General/Playback/EPG/...) inside the identical wrapper. An
+ * earlier, unscoped version of this rule collapsed and \`inert\`-ed the Settings
+ * list too, taking it to a literal 0×0 rect the moment focus had last resolved
+ * to 'content' — which happens almost immediately on most pages — making the
+ * entire Settings category column unreachable by any key.
+ * \`.category-item\` is the class the Live/VOD/Series category rows actually
+ * render with; Settings does not use it.
  */
-[data-tv-nav][${REGION_ATTRIBUTE}="content"] aside.context-panel {
+[data-tv-nav][${REGION_ATTRIBUTE}="content"] aside.context-panel:has(.category-item) {
     max-width: var(--tv-collapsed-panel) !important;
     min-width: 0 !important;
     padding-left: 0 !important;
@@ -140,7 +148,7 @@ const TV_FOCUS_CSS = `
     overflow: hidden !important;
 }
 
-[data-tv-nav] aside.context-panel {
+[data-tv-nav] aside.context-panel:has(.category-item) {
     transition: max-width 180ms ease-out !important;
 }
 

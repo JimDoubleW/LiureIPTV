@@ -76,9 +76,29 @@ describe('panel region', () => {
     describe('collapsing the category column', () => {
         beforeEach(() => {
             document.body.innerHTML = `
-                <aside class="context-panel"><button id="category"></button></aside>
+                <aside class="context-panel"><button id="category" class="category-item"></button></aside>
                 <main><button id="tile"></button></main>
             `;
+        });
+
+        it('leaves an unrelated context-panel alone (regression: Settings)', () => {
+            // aside.context-panel is a shared workspace-shell wrapper, not
+            // something unique to Live/VOD/Series browsing. The Settings page's
+            // own category list (General/Playback/EPG/...) renders inside the
+            // identical wrapper class but never uses `.category-item` — an
+            // unscoped selector collapsed and `inert`-ed it too, taking a
+            // working button down to a literal 0×0 rect unreachable by any key.
+            document.body.innerHTML = `
+                <aside class="context-panel">
+                    <button id="settings-section" class="nav-item settings-section-item"></button>
+                </aside>
+                <main><button id="tile2"></button></main>
+            `;
+
+            applyRegion(byId('tile2'));
+
+            const panel = document.querySelector('aside.context-panel');
+            expect(panel?.hasAttribute('inert')).toBe(false);
         });
 
         it('makes the collapsed column inert', () => {
