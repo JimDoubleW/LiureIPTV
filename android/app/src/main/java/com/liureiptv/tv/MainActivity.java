@@ -1,6 +1,7 @@
 package com.liureiptv.tv;
 
 import android.os.Build;
+import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.WindowInsets;
 import android.webkit.WebView;
@@ -8,6 +9,17 @@ import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        // Must run before super.onCreate(), which is what builds the Bridge
+        // and needs the plugin class in hand to register it. BridgeActivity's
+        // onCreate() also replays the launch intent through onNewIntent(),
+        // which is how BackupImportPlugin sees a share that cold-started the
+        // app, not just one that arrives while it is already running.
+        registerPlugin(BackupImportPlugin.class);
+        super.onCreate(savedInstanceState);
+    }
 
     /**
      * Takes the D-pad away from the WebView and hands it to the app's own

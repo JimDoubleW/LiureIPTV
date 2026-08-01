@@ -27,6 +27,17 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
 
+            <!-- Makes the app a share target for playlist backup JSON files,
+                 so a file manager's "Share" action can hand one in — the only
+                 reachable way to import a backup via the remote, since the
+                 D-pad engine's synthetic clicks cannot open the native file
+                 chooser (see BackupImportPlugin's doc comment). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/json" />
+            </intent-filter>
+
         </activity>
 
         <provider

@@ -11,7 +11,11 @@ import {
 import { WORKSPACE_SHELL_ACTIONS } from '@iptvnator/workspace/shell/util';
 import { MockProvider } from 'ng-mocks';
 import { EMPTY, of } from 'rxjs';
-import { DataService, RuntimeCapabilitiesService } from '@iptvnator/services';
+import {
+    DataService,
+    PlaylistBackupService,
+    RuntimeCapabilitiesService,
+} from '@iptvnator/services';
 import {
     Language,
     Settings,
@@ -107,6 +111,13 @@ describe('AppComponent', () => {
                 MockProvider(EpgService, {
                     fetchEpg: jest.fn(),
                 }),
+                // AndroidBackupImportService (constructed eagerly here, like
+                // PlaylistOpenRequestService, so a share never arrives before
+                // it is listening) pulls in PlaylistBackupImportApplyService
+                // -> PlaylistBackupService, which otherwise needs
+                // NgxIndexedDBService — not relevant to this spec, since the
+                // Android listener stays dormant off the Android runtime.
+                MockProvider(PlaylistBackupService),
                 {
                     provide: EpgRuntimeBridgeService,
                     useValue: epgBridge,

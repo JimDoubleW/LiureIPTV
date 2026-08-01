@@ -1,16 +1,12 @@
-import { inject, Injectable, Injector, signal } from '@angular/core';
+import { inject, Injectable, signal } from '@angular/core';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
-import { Store } from '@ngrx/store';
-import { TranslateService } from '@ngx-translate/core';
-import { PlaylistActions } from '@iptvnator/m3u-state';
-import { XtreamStore } from '@iptvnator/portal/xtream/data-access';
 import {
-    PlaylistBackupImportSummary,
     PlaylistBackupService,
     RuntimeCapabilitiesService,
 } from '@iptvnator/services';
 import { isAndroidRuntime } from '../services/android/android-runtime';
+import { PlaylistBackupImportApplyService } from '../services/playlist-backup-import-apply.service';
 import { SettingsSnackbarService } from './settings-snackbar.service';
 
 @Injectable()
@@ -18,9 +14,9 @@ export class SettingsBackupFacade {
     private readonly playlistBackupService = inject(PlaylistBackupService);
     private readonly runtime = inject(RuntimeCapabilitiesService);
     private readonly settingsSnackbar = inject(SettingsSnackbarService);
-    private readonly store = inject(Store);
-    private readonly translate = inject(TranslateService);
-    private readonly injector = inject(Injector);
+    private readonly backupImportApply = inject(
+        PlaylistBackupImportApplyService
+    );
 
     readonly isExportingData = signal(false);
 
@@ -98,38 +94,7 @@ export class SettingsBackupFacade {
                 return;
             }
 
-            try {
-                const summary = await this.playlistBackupService.importBackup(
-                    await file.text()
-                );
-                this.injector
-                    .get(XtreamStore, null)
-                    ?.reconcilePendingRestoreBlock();
-
-                if (summary.imported > 0 || summary.merged > 0) {
-                    this.store.dispatch(PlaylistActions.removeAllPlaylists());
-                    this.store.dispatch(PlaylistActions.loadPlaylists());
-                }
-
-                onImported();
-                this.settingsSnackbar.open(
-                    this.buildBackupImportSummary(summary)
-                );
-
-                if (summary.errors.length > 0) {
-                    console.error(
-                        'Playlist backup import completed with issues:',
-                        summary.errors
-                    );
-                }
-            } catch (error) {
-                console.error('Failed to import playlist backup:', error);
-                this.settingsSnackbar.open(
-                    error instanceof Error
-                        ? error.message
-                        : this.translate.instant('SETTINGS.IMPORT_ERROR')
-                );
-            }
+            await this.backupImportApply.apply(await file.text(), onImported);
         });
 
         input.click();
@@ -170,11 +135,5 @@ export class SettingsBackupFacade {
         link.download = defaultFileName;
         link.click();
         window.URL.revokeObjectURL(url);
-    }
-
-    private buildBackupImportSummary(
-        summary: PlaylistBackupImportSummary
-    ): string {
-        return `Backup import finished: ${summary.imported} imported, ${summary.merged} merged, ${summary.skipped} skipped, ${summary.failed} failed.`;
     }
 }

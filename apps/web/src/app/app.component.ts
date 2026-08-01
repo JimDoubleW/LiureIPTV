@@ -28,6 +28,7 @@ import {
 } from '@iptvnator/shared/interfaces';
 import { SettingsService } from './services/settings.service';
 import { PlaylistOpenRequestService } from './services/playlist-open-request.service';
+import { AndroidBackupImportService } from './services/android/android-backup-import.service';
 import { AppUpdateNotificationPanelComponent } from './app-update-notification-panel.component';
 
 const debugAppComponent = createDevLogger('AppComponent');
@@ -60,6 +61,7 @@ export class AppComponent implements OnInit {
     private settingsService = inject(SettingsService);
     private settingsStore = inject(SettingsStore);
     private playlistOpenRequests = inject(PlaylistOpenRequestService);
+    private androidBackupImport = inject(AndroidBackupImportService);
     private runtime = inject(RuntimeCapabilitiesService);
     private readonly workspaceShellActions = inject(WORKSPACE_SHELL_ACTIONS);
 
@@ -78,6 +80,11 @@ export class AppComponent implements OnInit {
         // queued there until the renderer subscribes. Start listening as early
         // as possible so a first-launch file is not delayed behind app init.
         this.playlistOpenRequests.start();
+
+        // Backups shared into the app from outside (Android only — see
+        // AndroidBackupImportService's doc comment for why this is the
+        // only reachable way to import a backup on that platform).
+        this.androidBackupImport.start();
 
         effect(() => {
             const size = this.settingsStore.coverSize?.() ?? 'medium';
