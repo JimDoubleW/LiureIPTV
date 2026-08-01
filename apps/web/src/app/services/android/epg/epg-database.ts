@@ -19,7 +19,7 @@ import {
  * `git show androidtv/main:docs/android-port/epg-storage-load-test.md`.
  */
 
-const DATABASE_NAME = 'iptvandor-epg';
+const DATABASE_NAME = 'liureiptv-epg';
 
 export type SqlRow = Record<string, string | number | null>;
 

@@ -1,4 +1,4 @@
-package com.iptvandor.tv;
+package com.liureiptv.tv;
 
 import android.os.Build;
 import android.view.KeyEvent;

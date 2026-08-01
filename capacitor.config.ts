@@ -9,8 +9,8 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * default with no warning.
  */
 const config: CapacitorConfig = {
-    appId: 'com.iptvandor.tv',
-    appName: 'IPTVandor',
+    appId: 'com.liureiptv.tv',
+    appName: 'LiureIPTV',
     webDir: 'dist/apps/web',
     server: {
         // http://localhost is still a secure context (MediaSource, EME,

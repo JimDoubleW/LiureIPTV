@@ -3,18 +3,24 @@
 Rules for the Android TV port. `CLAUDE.md` stays canonical for upstream
 IPTVnator; this file only covers what the port adds or overrides.
 
-Written from scratch against this tree (`androidtv/tvm-ui`, based on `master` at
-v0.23.0). Every claim below was verified here, not carried over.
+Written from scratch against this tree (originally `androidtv/tvm-ui`, renamed
+to `androidtv/main`; based on `master` at v0.23.0). Every claim below was
+verified here, not carried over.
 
 ## Fork And Branch Model
 
 | Branch | Role |
 | --- | --- |
 | `master` | Exact mirror of `upstream/master` (`4gray/iptvnator`). Never commit here. |
-| `androidtv/tvm-ui` | Port work. Branched from `master` (v0.23.0). |
-| `androidtv/main` | **Abandoned first attempt** — see below. Do not build on it. |
+| `androidtv/main` | Port work. Branched from `master` (v0.23.0); renamed from `androidtv/tvm-ui`. |
 
-Remotes: `origin` = the fork (`JimDoubleW/iptvandor`), `upstream` =
+`androidtv/main` used to name a different, abandoned first attempt (10 commits,
+based on `v0.22.0`) — that branch was deleted and the name reused for the
+current port line once the restart was confirmed done. Its tip is preserved at
+tag `archive/androidtv-main-abandoned`, not the branch name `androidtv/main`
+(see below).
+
+Remotes: `origin` = the fork (`JimDoubleW/LiureIPTV`), `upstream` =
 `4gray/iptvnator` with pushes disabled.
 
 Refresh `master` with a fast-forward only — if it ever fails, something was
@@ -47,10 +53,12 @@ off `master`, or expect those runs.
 
 ### The abandoned attempt
 
-`androidtv/main` carries an earlier port (10 commits, based on tag `v0.22.0`):
-Capacitor shell, native HTTP transport, D-pad spatial navigation, focus
-treatment, per-panel position memory, progressive panel collapse. It was
-deliberately **not** carried over — the restart is intentional.
+`archive/androidtv-main-abandoned` (a tag, **not** a branch — the branch name
+`androidtv/main` was reused for the current port line, see above) carries an
+earlier port (10 commits, based on tag `v0.22.0`): Capacitor shell, native HTTP
+transport, D-pad spatial navigation, focus treatment, per-panel position
+memory, progressive panel collapse. It was deliberately **not** carried
+over — the restart is intentional.
 
 Its documentation stayed there too and is worth reading before re-deriving
 anything, since it records device measurements that cost real time — notably
@@ -58,12 +66,13 @@ anything, since it records device measurements that cost real time — notably
 million-row week of guide data with the JS heap flat at 20 MB):
 
 ```bash
-git show androidtv/main:docs/android-port/epg-storage-load-test.md
+git show archive/androidtv-main-abandoned:docs/android-port/epg-storage-load-test.md
 ```
 
 The reference-player interaction benchmark was **re-observed on the device for
 this branch** and lives here: [`docs/android-port/tv-navigation-reference.md`](./docs/android-port/tv-navigation-reference.md).
-Prefer it over the `androidtv/main` copy, which is less accurate.
+Prefer it over the `archive/androidtv-main-abandoned` copy, which is less
+accurate.
 
 ## Fixed Bug: mat-select dropdowns unusable from a remote
 
@@ -336,8 +345,8 @@ Concretely: never scatter `if (isAndroid)` through components.
 ## Base Facts (v0.23.0)
 
 Verified against this tree. **These correct the v0.22.0-era notes on
-`androidtv/main`, which are stale here** — check before trusting anything that
-branch says about repo structure.
+`archive/androidtv-main-abandoned`, which are stale here** — check before
+trusting anything that tag says about repo structure.
 
 - **A release-note gate exists.** `.changes/` is present and `ci.yml` runs a
   `release-note-gate` job: a PR needs a release note or a `no-release-note`
@@ -572,8 +581,8 @@ channel list. Manual channel mappings are real and persist in `localStorage`.
 
 **Stage 2 (done): XMLTV import and storage**, in `services/android/epg/`.
 SQLite in the WebView via `@capacitor-community/sqlite`, chosen by measurement
-(`git show androidtv/main:docs/android-port/epg-storage-load-test.md`: 1M rows,
-JS heap flat at 20 MB).
+(`git show archive/androidtv-main-abandoned:docs/android-port/epg-storage-load-test.md`:
+1M rows, JS heap flat at 20 MB).
 
 Design points that are load-bearing rather than stylistic:
 
@@ -616,8 +625,8 @@ and need the same treatment.
 
 - **EPG is Electron-only and unported.** Every `supportsEpg*` capability probes a
   `window.electron` method. The storage route was already settled by measurement
-  on `androidtv/main` (SQLite in the WebView) — read that load test before
-  re-deciding.
+  on `archive/androidtv-main-abandoned` (SQLite in the WebView) — read that load
+  test before re-deciding.
 - **Catalogue payload headroom is unmeasured.** The bridge can hold several
   copies of a large `get_vod_streams` body on a ~1 GB budget.
 - **Stalker transport** was never implemented in the first attempt (it rejected
