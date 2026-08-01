@@ -178,7 +178,16 @@ export class SettingsFormFacade {
             await this.settingsStore.updateSettings(settings);
             onSaved();
 
-            if (!window.electron) {
+            // window.electron is truthy on Android too — a partial, EPG-only
+            // bridge (see android-epg-bridge.ts) that duck-typed capability
+            // probes rely on staying truthy. It has no updateSettings, so this
+            // must gate on the real Electron backend, not on bridge presence:
+            // confirmed on the reference device that calling it there threw
+            // "window.electron.updateSettings is not a function" *after* the
+            // store write above had already succeeded and onSaved() had
+            // already marked the form pristine — the save genuinely worked,
+            // but onSubmit()'s catch still fired the storage-failure banner.
+            if (!this.runtime.isElectron) {
                 return;
             }
 

@@ -110,3 +110,72 @@ describe('SettingsFormFacade save', () => {
         expect(onSaved).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('SettingsFormFacade save on the Android partial bridge', () => {
+    // window.electron is truthy on Android too (android-epg-bridge.ts installs
+    // a partial, EPG-only object so duck-typed capability probes light up),
+    // but it has no updateSettings/setMpvPlayerPath/setVlcPlayerPath. save()
+    // used to gate the desktop-mirroring calls on `!window.electron` alone,
+    // so it called the missing updateSettings unconditionally — throwing
+    // *after* the store write and onSaved() had already succeeded, which is
+    // what actually produced the user-reported "settings could not be saved"
+    // banner on a save that had, in fact, saved. Confirmed live on the
+    // reference device: the persisted value and pristine form both showed
+    // success while the failure snackbar was still on screen.
+    let facade: SettingsFormFacade;
+    let settingsStore: MockSettingsStore;
+    const originalElectron = window.electron;
+    const originalCapacitor = (
+        globalThis as unknown as { Capacitor?: unknown }
+    ).Capacitor;
+
+    beforeEach(() => {
+        window.electron = {
+            fetchEpg: jest.fn(),
+        } as unknown as typeof window.electron;
+        (
+            globalThis as unknown as { Capacitor: { getPlatform(): string } }
+        ).Capacitor = { getPlatform: () => 'android' };
+
+        TestBed.configureTestingModule({
+            providers: [
+                UntypedFormBuilder,
+                SettingsFormFacade,
+                SettingsSnackbarService,
+                RuntimeCapabilitiesService,
+                {
+                    provide: EpgRuntimeBridgeService,
+                    useValue: createEpgBridgeStub(),
+                },
+                { provide: MatSnackBar, useClass: MatSnackBarStub },
+                { provide: SettingsService, useClass: MockSettingsService },
+                { provide: SettingsStore, useClass: MockSettingsStore },
+            ],
+            imports: [TranslateModule.forRoot()],
+        });
+
+        facade = TestBed.inject(SettingsFormFacade);
+        settingsStore = TestBed.inject(
+            SettingsStore
+        ) as unknown as MockSettingsStore;
+        jest.spyOn(
+            TestBed.inject(TranslateService),
+            'instant'
+        ).mockImplementation((key) => key);
+    });
+
+    afterEach(() => {
+        window.electron = originalElectron;
+        (globalThis as unknown as { Capacitor?: unknown }).Capacitor =
+            originalCapacitor;
+    });
+
+    it('does not call the missing desktop-mirror methods and resolves cleanly', async () => {
+        const onSaved = jest.fn();
+
+        await expect(facade.save(onSaved)).resolves.toBeUndefined();
+
+        expect(settingsStore.updateSettings).toHaveBeenCalledTimes(1);
+        expect(onSaved).toHaveBeenCalledTimes(1);
+    });
+});

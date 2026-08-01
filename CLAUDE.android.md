@@ -222,6 +222,32 @@ surfacing `storageFailure('save')`. Regression coverage:
 `settings-store.service.spec.ts` (`'recovers from a single transient save
 failure without surfacing it'`).
 
+**Both of the above were real improvements but not the actual cause** — the
+user reproduced the identical banner immediately after this landed. Live CDP
+inspection while the user triggered it again (theme → Save) showed the tell:
+the theme persisted correctly to IndexedDB and the form ended up `ng-pristine`
+(only reachable through `save()`'s success path) *while the failure snackbar
+was still on screen*. The real bug: `android-epg-bridge.ts` installs a
+partial, EPG-only `window.electron` so duck-typed capability probes
+(`RuntimeCapabilitiesService`) light up the EPG paths — this makes
+`window.electron` **truthy on Android**, just incomplete. `save()` gated its
+desktop-mirroring block on `if (!window.electron)`, which is false on Android,
+so it unconditionally called `window.electron.updateSettings(settings)` —
+`updateSettings` does not exist on the EPG-only bridge, so this threw
+`TypeError: ... is not a function` *after* the real save and `onSaved()` had
+already succeeded, and `onSubmit()`'s catch turned that into the same
+"could not be saved" banner for a save that, in fact, saved. Fix: gate on
+`this.runtime.isElectron` (already Android-aware) instead of raw
+`window.electron` truthiness — the same "duck-typed presence ≠ real Electron"
+trap the EPG bridge's own doc comment warns about. Regression test:
+`'does not call the missing desktop-mirror methods and resolves cleanly'` in
+`settings-form.facade.spec.ts`, which sets `window.electron` to an
+EPG-methods-only stub plus the Android Capacitor flag. General lesson: any
+code that checks `window.electron` truthiness instead of
+`RuntimeCapabilitiesService.isElectron` is a latent Android bug — the two are
+no longer equivalent since the EPG bridge shipped, and grepping for `!window.electron`/`window.electron &&` outside `RuntimeCapabilitiesService`
+is worth doing next time this class of report comes back.
+
 ## TV Interaction Reference
 
 D-pad behaviour, the four surfaces, the measured focus palette and the adoption
