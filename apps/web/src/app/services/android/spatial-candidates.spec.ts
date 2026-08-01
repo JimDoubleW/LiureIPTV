@@ -1,10 +1,17 @@
 import {
+    collectCandidates,
     ensureFocusable,
     isNativelyActivatable,
     isNativelyFocusable,
     isPointerWidgetRoot,
     isTextEntry,
 } from './spatial-candidates';
+
+function withSize(el: HTMLElement, width = 40, height = 40): HTMLElement {
+    el.getBoundingClientRect = () =>
+        ({ width, height, left: 0, top: 0, right: width, bottom: height }) as DOMRect;
+    return el;
+}
 
 function element(html: string): HTMLElement {
     document.body.innerHTML = html;
@@ -116,6 +123,107 @@ describe('spatial candidates', () => {
                 expect(isNativelyActivatable(element(html))).toBe(false);
             }
         );
+    });
+
+    describe('collectCandidates', () => {
+        // Reported by the user: every checkbox across Settings was completely
+        // unreachable. mat-checkbox (and mat-radio-button, mat-slide-toggle —
+        // the same Material pattern) renders its real, tabbable native
+        // <input> at opacity: 0 and paints the visible mark on a sibling —
+        // confirmed on the reference device. The outer <mat-checkbox> has no
+        // tabindex and cursor: auto (not pointer), so only the transparent
+        // input was ever a candidate at all, and it was being rejected by the
+        // opacity check.
+        it('reaches a native control whose real input is opacity: 0 (mat-checkbox)', () => {
+            document.body.innerHTML = `
+                <mat-checkbox style="cursor: auto">
+                    <input type="checkbox" tabindex="0" style="opacity: 0" />
+                </mat-checkbox>
+            `;
+            const input = withSize(
+                document.querySelector('input') as HTMLElement
+            );
+            withSize(document.querySelector('mat-checkbox') as HTMLElement);
+
+            const candidates = collectCandidates();
+
+            expect(candidates.map((c) => c.target)).toContain(input);
+        });
+
+        it('still excludes a genuinely hidden control', () => {
+            document.body.innerHTML = `
+                <input type="checkbox" tabindex="0" style="opacity: 0; display: none" />
+            `;
+            withSize(document.querySelector('input') as HTMLElement);
+
+            const candidates = collectCandidates();
+
+            expect(candidates).toHaveLength(0);
+        });
+
+        it('still excludes a non-focusable div faded out with opacity', () => {
+            // opacity leniency only applies to elements the browser already
+            // focuses natively — an ordinary clickable div that has been
+            // faded to invisible (a dismissed toast, a hidden overlay
+            // remnant) must stay excluded.
+            document.body.innerHTML = `
+                <div style="cursor: pointer; opacity: 0"></div>
+            `;
+            withSize(document.querySelector('div') as HTMLElement);
+
+            const candidates = collectCandidates();
+
+            expect(candidates).toHaveLength(0);
+        });
+
+        it("does not also offer mat-checkbox's cursor:pointer wrapper div as a second, competing candidate", () => {
+            // The real bug, one layer deeper than the opacity fix above: even
+            // once the transparent <input> became reachable, its parent
+            // div.mdc-checkbox (cursor: pointer, tabindex="-1" — Material's
+            // own styling shell, exactly overlapping the input) still
+            // qualified as its own candidate too. Document order lists a
+            // parent before its children, so this wrapper was always found
+            // first, and findBestCandidate keeps the first candidate on a
+            // score tie — it always won over the input at the identical
+            // spot. Clicking it did not toggle the checkbox: confirmed on
+            // the reference device, where the second checkbox in every
+            // section a user reached this way silently failed to check.
+            document.body.innerHTML = `
+                <mat-checkbox style="cursor: auto">
+                    <div class="mdc-checkbox" tabindex="-1" style="cursor: pointer">
+                        <input type="checkbox" tabindex="0" style="opacity: 0" />
+                    </div>
+                </mat-checkbox>
+            `;
+            const wrapper = withSize(
+                document.querySelector('.mdc-checkbox') as HTMLElement
+            );
+            const input = withSize(document.querySelector('input') as HTMLElement);
+
+            const candidates = collectCandidates().map((c) => c.target);
+
+            expect(candidates).toContain(input);
+            expect(candidates).not.toContain(wrapper);
+        });
+
+        it("still keeps a card's own Play button reachable alongside the card", () => {
+            // The card is much larger than the button it contains — not the
+            // same spot — so both stay legitimate, independent candidates.
+            document.body.innerHTML = `
+                <div id="card" style="cursor: pointer">
+                    <button id="play">Play</button>
+                </div>
+            `;
+            const card = document.getElementById('card') as HTMLElement;
+            card.getBoundingClientRect = () =>
+                ({ width: 300, height: 200, left: 0, top: 0, right: 300, bottom: 200 }) as DOMRect;
+            const play = withSize(document.getElementById('play') as HTMLElement);
+
+            const candidates = collectCandidates().map((c) => c.target);
+
+            expect(candidates).toContain(card);
+            expect(candidates).toContain(play);
+        });
     });
 
     describe('ensureFocusable', () => {

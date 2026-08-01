@@ -109,17 +109,81 @@ export function isPointerWidgetRoot(element: HTMLElement): boolean {
     return !parent || getComputedStyle(parent).cursor !== 'pointer';
 }
 
-function isVisible(element: HTMLElement, rect: DOMRect): boolean {
+/** Within this many pixels, two rects are treated as "the same spot". */
+const OVERLAP_TOLERANCE_PX = 2;
+
+/**
+ * True when a natively-focusable descendant fills `element`'s own rect —
+ * meaning `element` is not a widget in its own right, just a `cursor: pointer`
+ * shell wrapping the real control, and should defer to it rather than compete
+ * with it as a second candidate at the same spot.
+ *
+ * `mat-checkbox` is the confirmed case: its internal `div.mdc-checkbox`
+ * carries `cursor: pointer` (qualifying as a pointer-widget-root on its own,
+ * `tabindex="-1"` notwithstanding — this engine does not treat that attribute
+ * as exclusionary, since `ensureFocusable` stamps the same value onto every
+ * clickable div it has ever focused) and exactly overlaps the real, tabbable
+ * `<input>` positioned inside it. Document order lists a parent before its
+ * children, so this wrapper was always discovered first — and any tie in
+ * `findBestCandidate` keeps whichever candidate was found first — so it
+ * always won over the input it wraps. Clicking it did not toggle anything:
+ * confirmed on the reference device, where the "real button inside a
+ * clickable card" case this function's sibling check exists for does not
+ * apply here, since the checkbox has no such card — the two elements occupy
+ * the identical rect rather than the wrapper being larger than an inner
+ * button, which is what still legitimately keeps both reachable elsewhere
+ * (e.g. a movie card and its own Play button).
+ */
+function wrapsFullyOverlappingFocusableDescendant(
+    element: HTMLElement,
+    rect: DOMRect
+): boolean {
+    const descendants = Array.from(
+        element.querySelectorAll<HTMLElement>(NATIVE_FOCUSABLE)
+    );
+    return descendants.some((descendant) => {
+        const d = descendant.getBoundingClientRect();
+        return (
+            Math.abs(d.width - rect.width) < OVERLAP_TOLERANCE_PX &&
+            Math.abs(d.height - rect.height) < OVERLAP_TOLERANCE_PX &&
+            Math.abs(d.top - rect.top) < OVERLAP_TOLERANCE_PX &&
+            Math.abs(d.left - rect.left) < OVERLAP_TOLERANCE_PX
+        );
+    });
+}
+
+/**
+ * `opacitySensitive` is false for elements the browser already focuses
+ * natively (`isNativelyFocusable`). `mat-checkbox`, `mat-radio-button` and
+ * `mat-slide-toggle` all render their real, tabbable native `<input>` at
+ * `opacity: 0` and paint the visible mark on a sibling — a standard technique
+ * for a custom-styled native control, not a sign the control is actually
+ * hidden. Confirmed on the reference device: every checkbox across every
+ * Settings section had `opacity: 0` on its focusable input, `cursor: auto`
+ * (not `pointer`) on the outer `<mat-checkbox>`, and a `display: none` label —
+ * so neither element passed the old check, and checkboxes were completely
+ * unreachable by the D-pad. A real browser's own Tab order does not exclude
+ * `opacity: 0` either — only `display: none`/`visibility: hidden` remove an
+ * element from it — so this brings the check in line with that, rather than
+ * inventing a stricter rule than the platform itself uses. Layout presence
+ * (`rect.width/height`) and `visibility`/`display` still gate every element,
+ * native or not, so a genuinely collapsed or detached control stays excluded.
+ */
+function isVisible(
+    element: HTMLElement,
+    rect: DOMRect,
+    opacitySensitive: boolean
+): boolean {
     if (rect.width <= 0 || rect.height <= 0) {
         return false;
     }
 
     const style = getComputedStyle(element);
-    return (
-        style.visibility !== 'hidden' &&
-        style.display !== 'none' &&
-        style.opacity !== '0'
-    );
+    if (style.visibility === 'hidden' || style.display === 'none') {
+        return false;
+    }
+
+    return !opacitySensitive || style.opacity !== '0';
 }
 
 function isWithinViewport(rect: DOMRect, width: number, height: number): boolean {
@@ -174,10 +238,15 @@ export function collectCandidates(
         if (!isWithinViewport(rect, viewportWidth, viewportHeight)) {
             continue;
         }
-        if (!isVisible(element, rect)) {
+        const nativelyFocusable = isNativelyFocusable(element);
+        if (!isVisible(element, rect, !nativelyFocusable)) {
             continue;
         }
-        if (!isNativelyFocusable(element) && !isPointerWidgetRoot(element)) {
+        if (
+            !nativelyFocusable &&
+            (!isPointerWidgetRoot(element) ||
+                wrapsFullyOverlappingFocusableDescendant(element, rect))
+        ) {
             continue;
         }
 
