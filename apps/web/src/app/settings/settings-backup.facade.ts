@@ -1,4 +1,6 @@
 import { inject, Injectable, Injector, signal } from '@angular/core';
+import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
 import { PlaylistActions } from '@iptvnator/m3u-state';
@@ -8,6 +10,7 @@ import {
     PlaylistBackupService,
     RuntimeCapabilitiesService,
 } from '@iptvnator/services';
+import { isAndroidRuntime } from '../services/android/android-runtime';
 import { SettingsSnackbarService } from './settings-snackbar.service';
 
 @Injectable()
@@ -48,6 +51,24 @@ export class SettingsBackupFacade {
                 }
 
                 await window.electron.writeFile(savePath, backup.json);
+            } else if (isAndroidRuntime()) {
+                // The browser download flow below (Blob + `<a download>`)
+                // has no native download manager to catch it in the
+                // Capacitor WebView — no DownloadListener is registered, and
+                // there is no Filesystem-backed "Downloads" write without a
+                // permission prompt on modern Android. Confirmed on the
+                // reference device: the click ran, exportData() reported
+                // success, and no file ever reached anywhere the user could
+                // find it. Writing to the app's own cache dir needs no
+                // permission, and the native share sheet is what lets the
+                // user actually put the file somewhere (Drive, email, a
+                // files app) — the same reason TiviMate and other TV IPTV
+                // apps hand backups off to a share sheet instead of a
+                // Downloads folder that is not reliably browsable on a TV.
+                await this.shareBackupOnAndroid(
+                    backup.defaultFileName,
+                    backup.json
+                );
             } else {
                 this.downloadBackupInBrowser(
                     backup.defaultFileName,
@@ -112,6 +133,28 @@ export class SettingsBackupFacade {
         });
 
         input.click();
+    }
+
+    /**
+     * Writes the backup into the app's own cache dir (no permission needed)
+     * and hands it to the native share sheet, which is what actually lets
+     * the user put the file somewhere they can find it again.
+     */
+    private async shareBackupOnAndroid(
+        defaultFileName: string,
+        json: string
+    ): Promise<void> {
+        const { uri } = await Filesystem.writeFile({
+            path: defaultFileName,
+            data: json,
+            directory: Directory.Cache,
+            encoding: Encoding.UTF8,
+        });
+
+        await Share.share({
+            title: defaultFileName,
+            files: [uri],
+        });
     }
 
     private downloadBackupInBrowser(

@@ -1,5 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { Filesystem } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import {
     selectAllPlaylistsMeta,
     selectIsEpgAvailable,
@@ -16,6 +18,14 @@ import {
     createElectronStub,
     MatSnackBarStub,
 } from './test-stubs/settings-test-harness.stub';
+
+// @capacitor/filesystem's real web fallback needs IndexedDB, unavailable in
+// jsdom; @capacitor/share has no meaningful web behavior either. Both are
+// redirected to controllable jest.fn()-based stubs via jest.config.ts's
+// moduleNameMapper (see apps/web/src/test-stubs/capacitor-*.js) — the same
+// mechanism already used for video.js, and more reliable here than
+// jest.unstable_mockModule, which did not intercept these packages under
+// this project's ESM jest preset.
 
 describe('SettingsBackupFacade', () => {
     let facade: SettingsBackupFacade;
@@ -136,6 +146,62 @@ describe('SettingsBackupFacade', () => {
                 configurable: true,
                 value: originalRevokeObjectURL,
             });
+        }
+    });
+
+    it('shares the backup via the native share sheet on Android instead of the browser download', async () => {
+        // Reported by the user: exporting a playlist backup failed on
+        // Android. That crash (window.electron.dbGetAllCategories is not a
+        // function, in PlaylistBackupService) is fixed separately; this
+        // covers what must happen once the export itself succeeds. Two
+        // things must NOT happen: window.electron is truthy on Android too
+        // (the partial, EPG-only bridge), so this must not take the
+        // Electron save-dialog branch; and the Blob + <a download> browser
+        // fallback has no native download manager to catch it in the
+        // Capacitor WebView, so it must not take that branch either.
+        // Confirmed on the reference device: before this fix, the click ran,
+        // exportData() reported success, and no file ever reached anywhere
+        // the user could find it.
+        (
+            globalThis as unknown as { Capacitor: { getPlatform(): string } }
+        ).Capacitor = { getPlatform: () => 'android' };
+        // The real Android bridge (android-epg-bridge.ts) has no
+        // saveFileDialog/writeFile — using the full Electron stub here would
+        // make supportsDesktopFileSave true regardless of platform and hide
+        // exactly the bug this test exists for.
+        window.electron = {
+            fetchEpg: jest.fn(),
+        } as unknown as typeof window.electron;
+        (Filesystem.writeFile as jest.Mock).mockResolvedValueOnce({
+            uri: 'file:///cache/iptvnator-playlist-backup-2026-04-21.json',
+        });
+        configure();
+
+        const createObjectURL = jest.fn();
+        Object.defineProperty(window.URL, 'createObjectURL', {
+            configurable: true,
+            value: createObjectURL,
+        });
+
+        try {
+            await facade.exportData(noWait);
+
+            expect(window.electron.saveFileDialog).toBeUndefined();
+            expect(createObjectURL).not.toHaveBeenCalled();
+            expect(Filesystem.writeFile).toHaveBeenCalledWith({
+                path: BACKUP_EXPORT_RESULT.defaultFileName,
+                data: BACKUP_EXPORT_RESULT.json,
+                directory: 'CACHE',
+                encoding: 'utf8',
+            });
+            expect(Share.share).toHaveBeenCalledWith({
+                title: BACKUP_EXPORT_RESULT.defaultFileName,
+                files: [
+                    'file:///cache/iptvnator-playlist-backup-2026-04-21.json',
+                ],
+            });
+        } finally {
+            delete (globalThis as { Capacitor?: unknown }).Capacitor;
         }
     });
 

@@ -41,6 +41,9 @@ export default {
       '<rootDir>/src/test-stubs/iptv-playlist-parser.mjs',
     '^shaka-player$': '<rootDir>/src/test-stubs/shaka-player.js',
     '^video.js$': '<rootDir>/src/test-stubs/video-js.js',
+    '^@capacitor/filesystem$':
+      '<rootDir>/src/test-stubs/capacitor-filesystem.js',
+    '^@capacitor/share$': '<rootDir>/src/test-stubs/capacitor-share.js',
     '^rxjs': '<rootDir>/../../node_modules/rxjs/dist/bundles/rxjs.umd.js',
   },
   transform: angularEsmPreset.transform,
