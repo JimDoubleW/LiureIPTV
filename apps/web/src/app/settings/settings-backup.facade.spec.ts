@@ -266,4 +266,32 @@ describe('SettingsBackupFacade', () => {
         ).toBeLessThan(onImported.mock.invocationCallOrder[0]);
         createElement.mockRestore();
     });
+
+    it('shows Android-specific import instructions instead of opening a file picker', () => {
+        // Reported by the user as "import ne marche pas": pressing Import
+        // silently did nothing, because <input type="file">.click() cannot
+        // open Android's native file chooser from a D-pad-synthesized click
+        // (no genuine user activation). The button's only job on this
+        // platform is to say so instead of failing silently.
+        (
+            globalThis as unknown as { Capacitor: { getPlatform(): string } }
+        ).Capacitor = { getPlatform: () => 'android' };
+        configure();
+        const snackBar = TestBed.inject(
+            MatSnackBar
+        ) as unknown as MatSnackBarStub;
+
+        facade.importData(jest.fn());
+
+        expect(playlistBackupService.importBackup).not.toHaveBeenCalled();
+        expect(snackBar.open).toHaveBeenCalledWith(
+            expect.stringContaining('share it into this app'),
+            'OK',
+            expect.objectContaining({
+                panelClass: ['settings-snackbar', 'settings-snackbar--error'],
+            })
+        );
+
+        delete (globalThis as { Capacitor?: unknown }).Capacitor;
+    });
 });

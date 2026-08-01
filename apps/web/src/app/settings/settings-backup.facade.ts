@@ -19,6 +19,7 @@ export class SettingsBackupFacade {
     );
 
     readonly isExportingData = signal(false);
+    readonly isAndroid = isAndroidRuntime();
 
     async exportData(waitForUiFeedbackFrame: () => Promise<void>) {
         if (this.isExportingData()) {
@@ -82,6 +83,26 @@ export class SettingsBackupFacade {
     }
 
     importData(onImported: () => void): void {
+        if (this.isAndroid) {
+            // <input type="file">.click() cannot open Android's native file
+            // chooser here: it requires genuine user activation, and a D-pad
+            // OK press only reaches this button via
+            // WebView#evaluateJavascript (MainActivity.dispatchKeyEvent),
+            // which carries none. Before this message, pressing the button
+            // did nothing at all — confirmed on the reference device with a
+            // real remote press, not just a CDP click, and reported by the
+            // user as "import ne marche pas" once the silent failure looked
+            // identical to a totally broken feature. The real, working path
+            // is BackupImportPlugin's share-intent receiver (see
+            // AndroidBackupImportService), reachable only from outside the
+            // app, so the button's only job on this platform is to say so.
+            this.settingsSnackbar.error(
+                'To import a backup on Android, open your file manager, select the backup .json file, and share it into this app.',
+                'OK'
+            );
+            return;
+        }
+
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'application/json';
