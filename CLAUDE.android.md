@@ -65,6 +65,52 @@ The TiviMate interaction benchmark was **re-observed on the device for this
 branch** and lives here: [`docs/android-port/tv-navigation-reference.md`](./docs/android-port/tv-navigation-reference.md).
 Prefer it over the `androidtv/main` copy, which is less accurate.
 
+## Fixed Bug: mat-select dropdowns unusable from a remote
+
+Reported by the user for the language picker specifically, but the cause is
+generic to every `mat-select` in the app (theme, cover size, startup view,
+etc.) and worth understanding before touching key dispatch again.
+
+`mat-select`'s open panel uses the ARIA 1.1 "activedescendant" combobox
+pattern: real DOM focus never leaves the trigger (`document.activeElement`
+stays `MAT-SELECT`), and an Angular `(keydown)` binding on that host element
+moves `aria-activedescendant` in response to a genuine keydown event — it does
+not rely on focus moving into option elements. Once the native key layer began
+consuming every D-pad press before the WebView saw one, that binding stopped
+firing entirely. Confirmed on-device: pressing DOWN in the open language list
+left `aria-activedescendant` untouched and silently moved *real* focus onto an
+unrelated "Visual theme" button via this engine's own geometric search, while
+the dropdown itself never reacted.
+
+Fix follows the same pattern already used for BACK/Escape: detect that a
+native/Material control currently owns the keys, and dispatch a **real**
+`KeyboardEvent` to it instead of running this engine's own logic —
+`dispatchRealKey()` / `isNativeControlOpen()` in `tv-navigation.ts`.
+
+Two traps, both worth remembering:
+
+- **`onKeyDown`'s fallback listener must check this before Enter, not just
+  before the direction branch.** An earlier version only guarded the arrow-key
+  path; Enter went through `activate()` first, which calls
+  `stopPropagation()` on success. Since `dispatchRealKey()` dispatches into the
+  normal DOM event flow, that same document-level capture listener intercepts
+  its OWN synthetic Enter before it ever reaches the mat-select trigger —
+  caught by a unit test exercising `dispatchFromNative` end to end, not by
+  testing the smaller helpers in isolation.
+- **Do not assume Angular CDK's overlay lives under a global
+  `.cdk-overlay-container`.** This app's mat-select renders its panel
+  (`.cdk-overlay-pane`) as a direct child of the trigger itself
+  (`cdk-overlay-popover`). A selector requiring that ancestor container never
+  matched anything, so the first fix attempt passed its own (wrongly-assumed)
+  unit tests yet still failed on the device — confirmed the pane is genuinely
+  removed from the DOM on close (not just hidden), so matching
+  `.cdk-overlay-pane` anywhere in the document is both simpler and safe.
+
+Verified on the reference device: opening the language list, DOWN/DOWN/UP walks
+`aria-activedescendant` through option 4 → 5 → 6 → 5 with focus staying on the
+trigger throughout, and OK commits the highlighted option ("Français") and
+closes the panel.
+
 ## Fixed Bug: Settings category list collapsed to 0×0
 
 The user reported the search bar "seemed to prevent navigation" into the

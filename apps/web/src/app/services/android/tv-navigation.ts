@@ -51,6 +51,85 @@ const DIRECTION_BY_KEY: Readonly<Record<string, TvDirection>> = {
     ArrowRight: 'right',
 };
 
+const KEY_BY_DIRECTION: Readonly<Record<TvDirection, string>> = {
+    up: 'ArrowUp',
+    down: 'ArrowDown',
+    left: 'ArrowLeft',
+    right: 'ArrowRight',
+};
+
+const KEY_CODES: Readonly<Record<string, number>> = {
+    ArrowUp: 38,
+    ArrowDown: 40,
+    ArrowLeft: 37,
+    ArrowRight: 39,
+    Enter: 13,
+    Escape: 27,
+};
+
+/**
+ * Dispatches a real `KeyboardEvent`, indistinguishable from a genuine one to
+ * any ordinary `(keydown)` listener — only `isTrusted` differs, which matters
+ * for browser-gated APIs like fullscreen/autoplay but not for Angular's own
+ * event bindings. This is how control is handed back to a native or Material
+ * widget that owns its own keyboard handling instead of this engine.
+ */
+function dispatchRealKey(key: string, target: EventTarget): void {
+    const event = new KeyboardEvent('keydown', {
+        key,
+        bubbles: true,
+        cancelable: true,
+    });
+
+    // Old-style `keyCode`/`which` are still tested by some libraries — Material
+    // itself, for one, which is why Escape needed this for BACK to close a
+    // dialog. A synthesized KeyboardEvent carries 0 for both unless set here.
+    const keyCode = KEY_CODES[key];
+    if (keyCode !== undefined) {
+        Object.defineProperty(event, 'keyCode', { value: keyCode });
+        Object.defineProperty(event, 'which', { value: keyCode });
+    }
+
+    target.dispatchEvent(event);
+}
+
+/**
+ * Whether the focused element currently belongs to a native/Material control
+ * that must keep driving its own arrow/Enter handling.
+ *
+ * The concrete case this exists for: `mat-select`'s open panel uses the ARIA
+ * 1.1 "activedescendant" combobox pattern. Real DOM focus never leaves the
+ * trigger — `document.activeElement` stays `MAT-SELECT` the whole time — and
+ * an `(keydown)` binding on that host element moves `aria-activedescendant`
+ * and scrolls the panel. That binding only fires on a genuine keydown event
+ * reaching the trigger, which stopped happening once the native key layer
+ * began consuming every D-pad press before the WebView ever saw it: confirmed
+ * on the reference device, pressing DOWN in the open language list left
+ * `aria-activedescendant` untouched and silently moved real focus onto an
+ * unrelated "Visual theme" button via this engine's own geometric search,
+ * while the dropdown sat there unresponsive.
+ *
+ * `select`/`[role="slider"]` are the same kind of case for a plain native
+ * `<select>` or a slider: both drive their own value via real keydown handling
+ * that this engine would otherwise short-circuit.
+ */
+function isNativeControlOpen(active: Element | null): boolean {
+    if (active?.closest('[role="menu"], [role="slider"], select')) {
+        return true;
+    }
+
+    // No fixed ancestor assumed: confirmed on the reference device that this
+    // app's mat-select renders its panel (`.cdk-overlay-pane`) as a direct
+    // child of the trigger itself (`cdk-overlay-popover`), not appended to a
+    // global `.cdk-overlay-container` the way most Angular CDK docs describe —
+    // a selector requiring that ancestor silently never matched, which is why
+    // the first version of this fix still failed on-device even though it
+    // passed in tests (jsdom fixtures had assumed the same wrong shape). The
+    // element is confirmed removed from the DOM on close, not merely hidden,
+    // so matching it anywhere in the document carries no stale-match risk.
+    return document.querySelector('.cdk-overlay-pane') !== null;
+}
+
 const memory = new ZoneMemory();
 
 function currentElement(): HTMLElement | null {
@@ -284,6 +363,22 @@ function onKeyDown(event: KeyboardEvent): void {
         return;
     }
 
+    // Checked before branching on Enter vs. direction, and before anything
+    // else: a select, a slider, an open menu, or an open mat-select's
+    // activedescendant panel owns BOTH its arrows and its Enter, and a real
+    // keydown reaching this listener already IS what such controls need, so
+    // simply not touching it is enough here (unlike dispatchFromNative, which
+    // has to synthesize one). Checking this only for the direction branch, as
+    // an earlier version did, left Enter going through `activate()` first —
+    // which calls `stopPropagation()` on success — so a synthetic Enter this
+    // same module dispatches at a mat-select to hand it control would have
+    // been swallowed by this very listener's capture-phase run before ever
+    // reaching the trigger's own binding.
+    const active = currentElement();
+    if (isNativeControlOpen(active)) {
+        return;
+    }
+
     if (event.key === 'Enter') {
         if (activate()) {
             event.preventDefault();
@@ -294,13 +389,6 @@ function onKeyDown(event: KeyboardEvent): void {
 
     const direction = DIRECTION_BY_KEY[event.key];
     if (!direction) {
-        return;
-    }
-
-    // Let the focused widget handle its own arrows — a select, a slider or an
-    // open menu owns them, and stealing them breaks the control.
-    const active = currentElement();
-    if (active?.closest('[role="menu"], [role="slider"], select')) {
         return;
     }
 
@@ -355,16 +443,7 @@ function goBack(): void {
         '.cdk-overlay-container .cdk-overlay-pane'
     );
     if (overlay) {
-        const escape = new KeyboardEvent('keydown', {
-            key: 'Escape',
-            bubbles: true,
-            cancelable: true,
-        });
-        // Material's dialogs still test `event.keyCode === 27`, and a
-        // synthesized KeyboardEvent carries keyCode 0 — without this the
-        // Escape lands and nothing closes.
-        Object.defineProperty(escape, 'keyCode', { value: 27 });
-        document.body.dispatchEvent(escape);
+        dispatchRealKey('Escape', document.body);
         return;
     }
 
@@ -401,13 +480,25 @@ function dispatchFromNative(key: string): void {
         return;
     }
 
-    if (mapped === 'ok') {
-        activate();
+    if (mapped === 'back') {
+        goBack();
         return;
     }
 
-    if (mapped === 'back') {
-        goBack();
+    // A native/Material control (an open mat-select, a slider, a plain
+    // <select>) must keep driving its own arrow/Enter handling — see
+    // isNativeControlOpen's doc comment for the mat-select case this was
+    // written for. Handing it a real KeyboardEvent is what makes that
+    // handling run at all, now that the native key layer means this
+    // function is the only thing that ever sees these presses.
+    if (isNativeControlOpen(currentElement())) {
+        const target = document.activeElement ?? document.body;
+        dispatchRealKey(mapped === 'ok' ? 'Enter' : KEY_BY_DIRECTION[mapped], target);
+        return;
+    }
+
+    if (mapped === 'ok') {
+        activate();
         return;
     }
 
