@@ -125,6 +125,31 @@ export class ZoneMemory {
         }
 
         const rect = remembered.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0 ? remembered : null;
+        if (rect.width <= 0 || rect.height <= 0) {
+            return null;
+        }
+
+        // Attached and correctly sized is not the same as "still what's on
+        // screen": one zone can be a single large scroll container shared by
+        // several unrelated sections (Settings' content pane holds all eight
+        // of its category sections — General, Playback, EPG, ... — in one
+        // `scrollHeight: 5496 / clientHeight: 484` column). Clicking a
+        // different category anchor-scrolls that SAME zone to a completely
+        // different section without detaching or resizing anything, so the
+        // remembered element from whatever section was visited last would
+        // otherwise still pass every check above while sitting far outside
+        // the viewport. Confirmed on the reference device: selecting Metadaten
+        // then pressing right recalled a button from the EPG section instead
+        // of landing on Metadaten's own content, because both belong to this
+        // one zone. Requiring the remembered element to still intersect the
+        // viewport is what tells "same panel, still showing" apart from "same
+        // zone, but scrolled to entirely different content since".
+        const onScreen =
+            rect.bottom > 0 &&
+            rect.top < window.innerHeight &&
+            rect.right > 0 &&
+            rect.left < window.innerWidth;
+
+        return onScreen ? remembered : null;
     }
 }

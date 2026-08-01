@@ -143,5 +143,45 @@ describe('focus zones', () => {
 
             expect(memory.recall(rail)).toBeNull();
         });
+
+        it('ignores a remembered element scrolled out of view within its own zone', () => {
+            // Regression: Settings' content pane is one big scroll container
+            // (scrollHeight 5496 / clientHeight 484 on the reference device)
+            // shared by all eight of its sections. Clicking a different
+            // category anchor-scrolls that SAME zone to a different section
+            // without detaching or resizing anything, so a remembered element
+            // from the section visited last still passed every check above
+            // while sitting far outside the viewport — confirmed on-device:
+            // selecting Metadaten then pressing right recalled a button from
+            // the EPG section instead of Metadaten's own content.
+            build('<main id="content"><button id="epgButton"></button></main>');
+            const content = byId('content');
+            const epgButton = byId('epgButton');
+            epgButton.getBoundingClientRect = () =>
+                ({
+                    width: 100,
+                    height: 40,
+                    left: 50,
+                    top: -2000,
+                    right: 150,
+                    bottom: -1960,
+                }) as DOMRect;
+            const memory = new ZoneMemory();
+
+            memory.remember(epgButton);
+
+            expect(memory.recall(content)).toBeNull();
+        });
+
+        it('still recalls a remembered element that is genuinely on screen', () => {
+            build('<nav id="rail"><button id="a"></button></nav>');
+            const rail = byId('rail');
+            const a = withSize(byId('a'));
+            const memory = new ZoneMemory();
+
+            memory.remember(a);
+
+            expect(memory.recall(rail)).toBe(a);
+        });
     });
 });
