@@ -353,3 +353,127 @@ describe('withRecentItems', () => {
         ]);
     });
 });
+
+describe('withRecentItems on the Android partial bridge', () => {
+    // window.electron is truthy on Android too (android-epg-bridge.ts installs
+    // a partial, EPG-only object so duck-typed capability probes light up),
+    // but the Xtream data source there is PwaXtreamDataSource, same as a real
+    // PWA. addRecentItem/clearRecentItems/clearGlobalRecentlyViewed used to
+    // gate their PWA-only branches on `!window.electron`/`window.electron`
+    // alone, so on Android they took the Electron branch instead: a cold
+    // content cache resolved to a null contentId instead of falling back to
+    // the Xtream ID, and clearing recent items called the DB-backed service
+    // (which safely no-ops there) instead of the in-memory PWA data source
+    // that actually holds Android's recent items.
+    const originalElectron = window.electron;
+    const originalCapacitor = (
+        globalThis as unknown as { Capacitor?: unknown }
+    ).Capacitor;
+    let store: InstanceType<typeof TestRecentItemsStore>;
+    let databaseService: {
+        clearGlobalRecentlyViewed: jest.Mock;
+        clearPlaylistRecentItems: jest.Mock;
+    };
+    let dataSource: {
+        addRecentItem: jest.Mock;
+        clearRecentItems: jest.Mock;
+        getContentByXtreamId: jest.Mock;
+        getRecentItems: jest.Mock;
+    };
+    let playlistsService: {
+        clearPlaylistRecentlyViewed: jest.Mock;
+        getAllPlaylists: jest.Mock;
+    };
+
+    beforeEach(() => {
+        Object.defineProperty(window, 'electron', {
+            configurable: true,
+            writable: true,
+            value: { fetchEpg: jest.fn() } as unknown as Window['electron'],
+        });
+        (
+            globalThis as unknown as { Capacitor: { getPlatform(): string } }
+        ).Capacitor = { getPlatform: () => 'android' };
+
+        databaseService = {
+            clearGlobalRecentlyViewed: jest.fn().mockResolvedValue(undefined),
+            clearPlaylistRecentItems: jest.fn().mockResolvedValue(undefined),
+        };
+        dataSource = {
+            addRecentItem: jest.fn().mockResolvedValue(undefined),
+            clearRecentItems: jest.fn().mockResolvedValue(undefined),
+            getContentByXtreamId: jest.fn().mockResolvedValue(null),
+            getRecentItems: jest.fn().mockResolvedValue([]),
+        };
+        playlistsService = {
+            clearPlaylistRecentlyViewed: jest
+                .fn()
+                .mockReturnValue(of(undefined)),
+            getAllPlaylists: jest.fn().mockReturnValue(of([])),
+        };
+
+        TestBed.configureTestingModule({
+            providers: [
+                TestRecentItemsStore,
+                { provide: DatabaseService, useValue: databaseService },
+                { provide: XTREAM_DATA_SOURCE, useValue: dataSource },
+                { provide: PlaylistsService, useValue: playlistsService },
+            ],
+        });
+
+        store = TestBed.inject(TestRecentItemsStore);
+    });
+
+    afterEach(() => {
+        Object.defineProperty(window, 'electron', {
+            configurable: true,
+            writable: true,
+            value: originalElectron,
+        });
+        (globalThis as unknown as { Capacitor?: unknown }).Capacitor =
+            originalCapacitor;
+    });
+
+    it('falls back to the Xtream ID like PWA when the cached content is cold', async () => {
+        store.addRecentItem({
+            xtreamId: 1767451,
+            contentType: 'movie',
+            playlist: signal({ id: 'playlist-1' }),
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(dataSource.addRecentItem).toHaveBeenCalledWith(
+            1767451,
+            'playlist-1',
+            undefined
+        );
+    });
+
+    it('clears recent items through the PWA data source, not the DB-backed service', async () => {
+        store.clearRecentItems({ id: 'playlist-1' });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(dataSource.clearRecentItems).toHaveBeenCalledWith(
+            'playlist-1'
+        );
+        expect(databaseService.clearPlaylistRecentItems).not.toHaveBeenCalled();
+    });
+
+    it('clears Xtream recent items through the PWA data source during a global clear', async () => {
+        playlistsService.getAllPlaylists.mockReturnValue(
+            of([
+                {
+                    _id: 'xtream-1',
+                    serverUrl: 'https://xtream.example.com',
+                },
+            ])
+        );
+
+        await store.clearGlobalRecentlyViewed();
+
+        expect(
+            databaseService.clearGlobalRecentlyViewed
+        ).not.toHaveBeenCalled();
+        expect(dataSource.clearRecentItems).toHaveBeenCalledWith('xtream-1');
+    });
+});

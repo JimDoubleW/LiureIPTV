@@ -7,7 +7,11 @@ import {
 } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { firstValueFrom, pipe, switchMap, tap } from 'rxjs';
-import { DatabaseService, PlaylistsService } from '@iptvnator/services';
+import {
+    DatabaseService,
+    PlaylistsService,
+    RuntimeCapabilitiesService,
+} from '@iptvnator/services';
 import {
     buildPlaylistRecentItems,
     Playlist,
@@ -76,7 +80,8 @@ export const withRecentItems = function () {
                 store,
                 dbService = inject(DatabaseService),
                 playlistsService = inject(PlaylistsService),
-                dataSource = inject(XTREAM_DATA_SOURCE)
+                dataSource = inject(XTREAM_DATA_SOURCE),
+                runtime = inject(RuntimeCapabilitiesService)
             ) => ({
                 addRecentItem: rxMethod<{
                     xtreamId: number | string;
@@ -110,7 +115,7 @@ export const withRecentItems = function () {
                                     );
                                 const contentId =
                                     content?.id ??
-                                    (!window.electron
+                                    (!runtime.isElectron
                                         ? normalizedXtreamId
                                         : null);
 
@@ -178,7 +183,7 @@ export const withRecentItems = function () {
                 clearRecentItems: rxMethod<{ id: string }>(
                     pipe(
                         switchMap(async (playlist) => {
-                            if (window.electron) {
+                            if (runtime.isElectron) {
                                 await dbService.clearPlaylistRecentItems(
                                     playlist.id
                                 );
@@ -266,7 +271,7 @@ export const withRecentItems = function () {
                 },
                 async clearGlobalRecentlyViewed() {
                     try {
-                        if (window.electron) {
+                        if (runtime.isElectron) {
                             await dbService.clearGlobalRecentlyViewed();
                         }
                         const playlists = (await firstValueFrom(
@@ -275,7 +280,7 @@ export const withRecentItems = function () {
                         await Promise.all(
                             playlists.map(async (playlist) => {
                                 if (
-                                    !window.electron &&
+                                    !runtime.isElectron &&
                                     playlist.serverUrl &&
                                     !playlist.macAddress
                                 ) {

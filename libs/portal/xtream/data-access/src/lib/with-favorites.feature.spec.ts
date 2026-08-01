@@ -248,3 +248,92 @@ describe('withFavorites', () => {
         expect(store.isFavorite()).toBe(false);
     });
 });
+
+describe('withFavorites on the Android partial bridge', () => {
+    // window.electron is truthy on Android too (android-epg-bridge.ts installs
+    // a partial, EPG-only object so duck-typed capability probes light up),
+    // but the Xtream data source there is PwaXtreamDataSource, same as a real
+    // PWA. toggleFavorite/checkFavoriteStatus used to gate the PWA
+    // Xtream-ID fallback on `!window.electron` alone, so a cold cache on
+    // Android resolved contentId to null instead of the Xtream ID, silently
+    // failing every favorite toggle whose content wasn't already hydrated.
+    const originalElectron = window.electron;
+    const originalCapacitor = (
+        globalThis as unknown as { Capacitor?: unknown }
+    ).Capacitor;
+    let store: InstanceType<typeof TestFavoritesStore>;
+    let dataSource: {
+        addFavorite: jest.Mock;
+        getContentByXtreamId: jest.Mock;
+        isFavorite: jest.Mock;
+        removeFavorite: jest.Mock;
+    };
+
+    beforeEach(() => {
+        Object.defineProperty(window, 'electron', {
+            configurable: true,
+            writable: true,
+            value: { fetchEpg: jest.fn() } as unknown as Window['electron'],
+        });
+        (
+            globalThis as unknown as { Capacitor: { getPlatform(): string } }
+        ).Capacitor = { getPlatform: () => 'android' };
+
+        dataSource = {
+            addFavorite: jest.fn().mockResolvedValue(undefined),
+            getContentByXtreamId: jest.fn().mockResolvedValue(null),
+            isFavorite: jest.fn().mockResolvedValue(false),
+            removeFavorite: jest.fn().mockResolvedValue(undefined),
+        };
+
+        TestBed.configureTestingModule({
+            providers: [
+                TestFavoritesStore,
+                {
+                    provide: XTREAM_DATA_SOURCE,
+                    useValue: dataSource,
+                },
+            ],
+        });
+
+        store = TestBed.inject(TestFavoritesStore);
+    });
+
+    afterEach(() => {
+        Object.defineProperty(window, 'electron', {
+            configurable: true,
+            writable: true,
+            value: originalElectron,
+        });
+        (globalThis as unknown as { Capacitor?: unknown }).Capacitor =
+            originalCapacitor;
+    });
+
+    it('falls back to the Xtream ID like PWA when the cached content is cold', async () => {
+        const result = await store.toggleFavorite(
+            1767451,
+            'playlist-1',
+            'movie'
+        );
+
+        expect(dataSource.addFavorite).toHaveBeenCalledWith(
+            1767451,
+            'playlist-1',
+            undefined
+        );
+        expect(result).toBe(true);
+        expect(store.isFavorite()).toBe(true);
+    });
+
+    it('checks favorite status against the Xtream ID like PWA when the cached content is cold', async () => {
+        dataSource.isFavorite.mockResolvedValue(true);
+
+        await store.checkFavoriteStatus(1767451, 'playlist-1', 'movie');
+
+        expect(dataSource.isFavorite).toHaveBeenCalledWith(
+            1767451,
+            'playlist-1'
+        );
+        expect(store.isFavorite()).toBe(true);
+    });
+});
