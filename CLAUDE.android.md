@@ -359,6 +359,58 @@ off or drive it itself is whether the overlay's *content* has real ARIA roles
 Material's own key manager acts on, never the presence of the overlay or a
 `role="menu"` wrapper alone.
 
+## Fixed Bug: MatDialog action buttons unreachable by remote
+
+Reported by the user while adding Xtream credentials: impossible to reach
+Clear, Cancel, Test Connection, or Add in the Add Playlist dialog with the
+D-pad.
+
+Root cause, in `focus-zones.ts`: `mat-dialog-content` only got its own
+position-memory zone by accident, when its fields happened to overflow
+(`isScrollContainer`) — a short dialog's fields would not — and
+`mat-dialog-actions` never did, since it has no overflow of its own. Both fell
+through to the same `document.body` catch-all zone shared by anything else on
+the page with no landmark — the same shape as the rail-zone and Settings-zone
+bugs above, on a third kind of container.
+
+Confirmed on the reference device: pressing DOWN from the Password field
+correctly found the geometrically-nearest button (Cancel) — `move()`'s
+overlay-scoped `collectCandidates` (see the previous fix) worked as intended —
+but since Cancel's zone (`document.body`) differed from Password's
+(`mat-dialog-content`), the destination came from `memory.recall(body-zone)`
+instead of Cancel itself, recalling whatever unrelated element had been
+remembered there last (the active method-selector card, in this case). Every
+button was unreachable in favour of a stale, unrelated recall — geometry was
+finding the right answer and zone-memory was overriding it.
+
+Fix: add `mat-dialog-content` and `mat-dialog-actions` — genuine Angular
+Material custom element tags, not app-specific classes — to the landmark
+selector, so every dialog's content and its action-button row each get their
+own zone regardless of whether the content happens to overflow. This fixes
+the same shape in every `MatDialog` with an actions row, not just this one.
+
+Verified end to end on the reference device with genuine D-pad key presses:
+DOWN from Password now correctly reaches Cancel, LEFT/RIGHT moves between
+Cancel and Clear, and OK on Cancel closes the dialog. Separately noticed but
+NOT a bug: with Test Connection/Add still disabled (required fields empty),
+RIGHT from Cancel lands on a distant method-selector card instead of stopping
+— disabled buttons are correctly excluded from candidates, and once nothing
+usable remains in the same row, the engine's general "best remaining
+candidate anywhere" fallback picks whatever scores least-bad, which happens to
+be a tab card here. Once the form is actually filled in and Test
+Connection/Add are enabled, they win normally on proximity.
+
+General lesson, worth checking any time a "can't reach button X" report names
+a dialog or panel with actions at the bottom: `resolveZone`'s reliance on
+`isScrollContainer` as an implicit landmark is fragile — it only fires when a
+container happens to overflow, so anything that doesn't overflow (a short
+form, a fixed action row) silently falls back to the global `document.body`
+zone and inherits whatever unrelated thing was last remembered there.
+Structural, always-present tags (`mat-dialog-content`, `mat-dialog-actions`,
+and likely `mat-expansion-panel`, `mat-tab-body`, or similar Material
+containers if the same report recurs elsewhere) are the fix, not another
+scroll-container special case.
+
 ## TV Interaction Reference
 
 D-pad behaviour, the four surfaces, the measured focus palette and the adoption
