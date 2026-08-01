@@ -455,6 +455,48 @@ of focus" would make previously-focused tiles unreachable on a second visit.
 The overlap check above is what actually distinguishes Material's own
 non-focusable styling shell from this engine's bookkeeping.
 
+## Fixed Bug: playlist backup export failed on Android
+
+Reported by the user: "Export playlist backups fails". Two stacked problems,
+fixed in separate commits.
+
+**1. The export crashed before it could save.** Confirmed on the reference
+device: exporting a backup with an Xtream playlist threw
+`window.electron.dbGetAllCategories is not a function`. Root cause:
+`PlaylistBackupService.hasElectronApi()` gated on bare `!!window.electron`
+instead of `RuntimeCapabilitiesService.isElectron` — the same trap fixed
+twice already this session (settings save, Xtream favorites/recent items).
+`window.electron` is truthy on Android too (the partial, EPG-only bridge), so
+`buildXtreamEntry()`/`applyXtreamRestoreState()` both skipped their designed
+non-Electron branch and called straight into `getAllXtreamCategories()`,
+which calls `window.electron.dbGetAllCategories` with no guard of its own.
+Fix: gate on `runtime.isElectron` instead.
+
+**2. Even once export succeeded, no file reached anywhere findable.** The
+browser download fallback (`Blob` + `<a download>`) has no native
+`DownloadListener` registered to catch it in the Capacitor WebView, and no
+`Filesystem`-backed write to a shared Downloads folder is possible without a
+permission prompt on modern Android — confirmed on the reference device by
+checking `/sdcard/Download` and the app's own storage after a "successful"
+export: nothing was there. Fix: added `@capacitor/filesystem` and
+`@capacitor/share`. On Android, `exportData()` now writes the backup into the
+app's own cache dir (no permission needed) and hands it to the native share
+sheet, so the user can actually put the file somewhere (a files app,
+LocalSend, email, Drive) — the same reason other TV IPTV apps hand backups
+off to a share sheet rather than a Downloads folder that is not reliably
+browsable on a TV. Verified end to end: exporting opens the native Android
+share sheet with the backup file ready to hand off.
+
+**Testing note for next time a Capacitor plugin needs mocking**:
+`jest.unstable_mockModule` — the ESM-correct API this project otherwise uses
+for `apps/web`'s ESM jest preset — did not reliably intercept
+`@capacitor/filesystem`/`@capacitor/share` here, even called before a dynamic
+`import()` of the module under test (the documented-safe pattern). Fell back
+to the same static `moduleNameMapper` stub mechanism already used for
+`video.js` (`apps/web/src/test-stubs/capacitor-*.js`), which worked
+immediately. Try `moduleNameMapper` first for a Capacitor plugin, not
+`unstable_mockModule`.
+
 ## TV Interaction Reference
 
 D-pad behaviour, the four surfaces, the measured focus palette and the adoption
