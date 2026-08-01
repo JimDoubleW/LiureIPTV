@@ -31,11 +31,18 @@
                  so a file manager's "Share" action can hand one in — the only
                  reachable way to import a backup via the remote, since the
                  D-pad engine's synthetic clicks cannot open the native file
-                 chooser (see BackupImportPlugin's doc comment). -->
+                 chooser (see BackupImportPlugin's doc comment). Two <data>
+                 elements because real file managers disagree on the MIME
+                 type for a .json file: "Gestionnaire de fichiers +" (Alpha
+                 Inventor) on the reference device shares it as text/x-json
+                 (confirmed via logcat's ChooserActivity clip data), not the
+                 standard application/json — a single-type filter left the
+                 app entirely absent from that manager's share sheet. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/json" />
+                <data android:mimeType="text/x-json" />
             </intent-filter>
 
         </activity>
