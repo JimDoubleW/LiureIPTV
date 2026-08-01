@@ -411,6 +411,50 @@ and likely `mat-expansion-panel`, `mat-tab-body`, or similar Material
 containers if the same report recurs elsewhere) are the fix, not another
 scroll-container special case.
 
+## Fixed Bug: Settings checkboxes unreachable and non-toggling
+
+Reported by the user: "checkboxes don't work" in Settings — checked broadly
+rather than chasing one instance, since the report named no specific control.
+Confirmed on the reference device: all 16 `mat-checkbox`es across every
+Settings section (General, Playback, EPG, Dashboard, Metadata) were either
+unreachable or silently failed to toggle. Two separate bugs stacked in
+`spatial-candidates.ts`'s `collectCandidates()`:
+
+1. **Unreachable at all.** `mat-checkbox` (and `mat-radio-button`,
+   `mat-slide-toggle` — the same Material pattern) renders its real, tabbable
+   native `<input>` at `opacity: 0` and paints the visible mark on a sibling —
+   a standard technique for a custom-styled native control, not a sign it is
+   actually hidden. The outer `<mat-checkbox>` has `cursor: auto` (not
+   `pointer`) and no tabindex, so only that transparent input could ever
+   qualify as a candidate, and the opacity check rejected it exactly like a
+   genuinely hidden element. A real browser's own Tab order does not exclude
+   `opacity: 0` either — only `display: none`/`visibility: hidden` remove an
+   element from it. Fix: `isVisible()` now only applies the opacity check to
+   elements the browser does not already focus natively
+   (`isNativelyFocusable`); layout presence and `visibility`/`display` still
+   gate every element, native or not.
+2. **Reachable but silently failed to toggle.** Once (1) was fixed, the
+   checkbox's internal `div.mdc-checkbox` — `cursor: pointer`, `tabindex="-1"`,
+   exactly overlapping the real input — still qualified as its *own*
+   candidate via `isPointerWidgetRoot`. Document order lists a parent before
+   its children, so this wrapper was always discovered before the input it
+   wraps, and `findBestCandidate` keeps the first candidate on a score tie —
+   it always won at the identical spot. Clicking it did not toggle anything.
+   Fix: `collectCandidates()` now also skips a pointer-widget-root when a
+   natively-focusable descendant exactly fills its rect
+   (`wrapsFullyOverlappingFocusableDescendant`) — a card that is *larger*
+   than its own inner button (e.g. a VOD card and its Play button) still
+   legitimately keeps both reachable, since the two rects do not coincide.
+
+Verified end to end on the reference device with genuine D-pad presses:
+toggled all 16 checkboxes across every section. General lesson: `tabindex="-1"`
+on an element is **not** treated as an exclusion signal anywhere in this
+engine, deliberately — `ensureFocusable` stamps that exact value onto every
+clickable div it has ever focused, so using it to mean "author opted this out
+of focus" would make previously-focused tiles unreachable on a second visit.
+The overlap check above is what actually distinguishes Material's own
+non-focusable styling shell from this engine's bookkeeping.
+
 ## TV Interaction Reference
 
 D-pad behaviour, the four surfaces, the measured focus palette and the adoption
