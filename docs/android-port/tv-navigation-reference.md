@@ -277,6 +277,19 @@ Ranked by value against cost for this port:
 Items 1–3 are additive styling and state, so they stay clear of the shared
 components upstream keeps changing.
 
+## Implemented in the port
+
+The playback side of this contract now exists in the Android engine
+(`apps/web/src/app/services/android/player-keys.ts`):
+
+| Gesture | Status |
+| --- | --- |
+| OK first press on a channel — tune, list survives | done (was already the app's click behaviour) |
+| OK second press on the playing channel, or on the player — fullscreen | done, as *layout* fullscreen: key presses arrive via `evaluateJavascript`, which carries no user activation, so `requestFullscreen` rejects — the player host is pinned `fixed inset:0` behind a `data-tv-fullscreen` attribute instead |
+| UP/DOWN over fullscreen video — next/previous channel | done, by activating the adjacent `.channel-list-item` row; no-op when virtual scrolling has dropped the active row |
+| LEFT over fullscreen video — reveal the channel list | done (exits the layout fullscreen) |
+| BACK over fullscreen video — step back to the list | done; runs before the overlay/history branches, or BACK would leave the page |
+
 ## Raw key map observed
 
 | Key | From playback | From overlay | From guide |

@@ -1,5 +1,6 @@
 import { SELECTED_ATTRIBUTE } from './focus-zones';
 import { REGION_ATTRIBUTE } from './panel-region';
+import { TV_FULLSCREEN_ATTRIBUTE } from './player-keys';
 import { VIRTUAL_FOCUS_ATTRIBUTE } from './virtual-focus';
 
 /**
@@ -87,6 +88,29 @@ const TV_FOCUS_CSS = `
  * the lift is computed against whatever that panel's own background happens to
  * be, which is how the benchmark behaves.
  */
+/*
+ * Layout fullscreen for the player. The Fullscreen API is unusable here — key
+ * presses arrive via evaluateJavascript, which carries no user activation and
+ * requestFullscreen rejects without one — so the player host is simply pinned
+ * over everything. Same visual result, zero permissions involved.
+ */
+[data-tv-nav][${TV_FULLSCREEN_ATTRIBUTE}] app-web-player-view {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 2147483000 !important;
+    background: #000 !important;
+}
+
+[data-tv-nav][${TV_FULLSCREEN_ATTRIBUTE}] app-web-player-view .video-js,
+[data-tv-nav][${TV_FULLSCREEN_ATTRIBUTE}] app-web-player-view video {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+[data-tv-nav][${TV_FULLSCREEN_ATTRIBUTE}] app-web-player-view video {
+    object-fit: contain !important;
+}
+
 [data-tv-nav] [${SELECTED_ATTRIBUTE}]:not(:focus) {
     background-color: var(--tv-selected-fill) !important;
     border-radius: var(--tv-focus-radius) !important;

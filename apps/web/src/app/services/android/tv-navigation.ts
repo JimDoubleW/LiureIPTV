@@ -22,6 +22,13 @@ import {
     promoteVirtualFocus,
     setVirtualFocus,
 } from './virtual-focus';
+import {
+    enterFullscreen,
+    exitFullscreen,
+    handleFullscreenDirection,
+    isActiveChannelRow,
+    isInsidePlayer,
+} from './player-keys';
 import { scrollToReveal } from './scroll-reach';
 import { findBestCandidate, type TvDirection } from './spatial-geometry';
 import { installTvFocusStyles } from './tv-focus.styles';
@@ -165,6 +172,12 @@ function reopenContextPanel(): boolean {
 }
 
 function move(direction: TvDirection): boolean {
+    // Fullscreen video owns the D-pad outright: UP/DOWN zap, LEFT returns to
+    // the list, RIGHT is swallowed. No geometry while the video has the screen.
+    if (handleFullscreenDirection(direction)) {
+        return true;
+    }
+
     const origin = currentElement();
     if (!origin) {
         return focusFirstCandidate();
@@ -253,6 +266,15 @@ function activate(): boolean {
         return promoteVirtualFocus();
     }
 
+    // The benchmark's two-step OK: the first press on a channel tunes it and
+    // the list survives; the second — the row is now the active one — commits
+    // to fullscreen. OK on the player itself commits the same way.
+    if (isActiveChannelRow(active) || isInsidePlayer(active)) {
+        if (enterFullscreen()) {
+            return true;
+        }
+    }
+
     active.click();
     return true;
 }
@@ -323,6 +345,12 @@ const NATIVE_KEYS: Readonly<Record<string, TvDirection | 'ok' | 'back'>> = {
  *    app from any list.
  */
 function goBack(): void {
+    // Fullscreen first: walking history underneath fullscreen video would
+    // leave the page while the user only meant to shrink the picture.
+    if (exitFullscreen()) {
+        return;
+    }
+
     const overlay = document.querySelector(
         '.cdk-overlay-container .cdk-overlay-pane'
     );
