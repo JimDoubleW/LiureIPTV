@@ -65,6 +65,29 @@ The TiviMate interaction benchmark was **re-observed on the device for this
 branch** and lives here: [`docs/android-port/tv-navigation-reference.md`](./docs/android-port/tv-navigation-reference.md).
 Prefer it over the `androidtv/main` copy, which is less accurate.
 
+## Fixed Bug: "Open settings" unreachable in the rail
+
+Root cause and fix are worth reading before touching `focus-zones.ts` or the
+rail markup again, because the failure mode is silent and only shows up as
+"DOWN sometimes teleports backward" after enough real usage.
+
+`resolveZone()` (per-panel position memory) walks up to the nearest `<nav>` or
+`<aside>`. The rail's items are split across several small `<nav>` islands
+(one per section grouping), but two links sit outside every island — the brand
+link at the top, the settings link in the footer — so both fell through to the
+same outer `<aside class="app-rail">` as their only landmark, aliasing them to
+one shared memory slot. Whichever was focused more recently silently
+overwrote the other's remembered position, so a `DOWN` press crossing into that
+shared zone got redirected to it instead of the geometric target — reproduced
+end to end as a deterministic 4-item cycle that skipped "Open settings"
+entirely.
+
+Fix: `resolveZone` now honours an explicit `[data-tv-zone]` ancestor before
+falling back to the generic `<nav>`/`<aside>` walk, and `panel-region.ts` tags
+`aside.app-rail` with one such zone on every focus move — unifying the whole
+rail into a single memory slot, matching the mental model of "one vertical
+list", not several independent panels.
+
 ## TV Interaction Reference
 
 D-pad behaviour, the four surfaces, the measured focus palette and the adoption

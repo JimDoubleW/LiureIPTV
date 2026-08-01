@@ -26,6 +26,25 @@ describe('focus zones', () => {
     });
 
     describe('resolveZone', () => {
+        it('lets an explicit tag win over a nav nested inside it', () => {
+            // This is what unifies the rail: it is tagged, but its sections are
+            // separate <nav> islands, and <nav> matches the landmark selector
+            // too. Without this priority, the nearer <nav> would still win the
+            // walk before reaching the tagged ancestor.
+            build(`
+                <div data-tv-zone="rail">
+                    <a id="orphan"></a>
+                    <nav><button id="in-nav"></button></nav>
+                </div>
+            `);
+
+            const zoneRoot = document.querySelector('[data-tv-zone="rail"]');
+
+            expect(resolveZone(byId('orphan'))).toBe(zoneRoot);
+            expect(resolveZone(byId('in-nav'))).toBe(zoneRoot);
+        });
+
+
         it('groups elements under their nearest landmark', () => {
             build(`
                 <nav id="rail"><button id="a"></button></nav>

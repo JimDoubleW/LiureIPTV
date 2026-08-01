@@ -14,6 +14,17 @@
 /** The navigation rail, which is an `<aside>` as well. */
 const RAIL_SELECTOR = 'aside.app-rail';
 
+/**
+ * Marks the rail as one zone for `resolveZone` (focus-zones.ts), which
+ * otherwise fragments it: its sections are separate `<nav>` islands, and two
+ * links belong to none of them (the brand link, the settings footer),
+ * aliasing to a shared slot that let their memories overwrite each other and
+ * made "Open settings" unreachable whenever the brand link was the more
+ * recently remembered one.
+ */
+const ZONE_ATTRIBUTE = 'data-tv-zone';
+const RAIL_ZONE_ID = 'android-rail';
+
 export type TvRegion = 'rail' | 'context' | 'content';
 
 /** Set on the document element; the stylesheet keys off it. */
@@ -116,6 +127,8 @@ export function isAlreadySelectedCategory(element: Element): boolean {
 }
 
 export function applyRegion(element: Element): void {
+    tagRailZone();
+
     const region = resolveRegion(element);
     document.documentElement.setAttribute(REGION_ATTRIBUTE, region);
 
@@ -159,6 +172,17 @@ export function getLastContextFocus(): HTMLElement | null {
         lastContextFocus = null;
     }
     return lastContextFocus;
+}
+
+/**
+ * Idempotent: cheap enough to call on every focus move, which is what handles
+ * the rail being re-rendered by Angular after this module last ran.
+ */
+function tagRailZone(): void {
+    const rail = document.querySelector(RAIL_SELECTOR);
+    if (rail && rail.getAttribute(ZONE_ATTRIBUTE) !== RAIL_ZONE_ID) {
+        rail.setAttribute(ZONE_ATTRIBUTE, RAIL_ZONE_ID);
+    }
 }
 
 export function expandContext(): HTMLElement | null {

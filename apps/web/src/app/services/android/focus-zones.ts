@@ -59,6 +59,24 @@ function isScrollContainer(element: Element): boolean {
  * has exactly one zone.
  */
 export function resolveZone(element: Element): Element {
+    // An explicit tag wins over any landmark, even one nested inside it. This
+    // is what makes the whole rail one zone: it is tagged `data-tv-zone`, but
+    // its content is broken into several small `<nav>` islands (one per
+    // section grouping), and `<nav>` matches the landmark selector too. Without
+    // checking the explicit tag first, each inner `<nav>` would still win the
+    // walk before reaching the tagged ancestor, fragmenting one list into
+    // several independent memory slots. Two links sit outside every island (the
+    // brand link, the settings footer) and both fell back to the same outer
+    // `<aside>` as their only landmark — aliasing them to one shared slot, so
+    // whichever was focused more recently silently ate the other's memory.
+    let explicit: Element | null = element.parentElement;
+    while (explicit && explicit !== document.body) {
+        if (explicit.hasAttribute(ZONE_ATTRIBUTE)) {
+            return explicit;
+        }
+        explicit = explicit.parentElement;
+    }
+
     let current: Element | null = element.parentElement;
 
     while (current && current !== document.body) {
