@@ -648,6 +648,52 @@ when re-testing a snackbar-driven interaction back to back, either wait out
 its duration or dismiss it explicitly before concluding the next press did
 nothing.
 
+## Fixed Bug: LiureIPTV absent from the file manager's share sheet
+
+Second immediate follow-up: after the Import-button guidance landed, the
+user did the thing the guidance itself asked for — open a file manager,
+select the backup, share it — and reported "mon gestionnaire ne propose pas
+de partager vers LiureIPTV" (the app isn't even offered as a share target).
+
+Root cause, found by driving the reference device's actual installed file
+manager ("Gestionnaire de fichiers +", `com.alphainventor.filemanager`)
+through its real UI (`input tap`/`input swipe` long-press, not a shortcut)
+and reading `adb logcat` for the resulting `ChooserActivity` line: its Share
+action sends the file with `clip={text/x-json ...}` — **`text/x-json`, not
+`application/json`**. The manifest's intent-filter only declared
+`application/json`, so Android's intent resolution — which requires an exact
+(or wildcard) MIME type match, no fuzzy comparison — never considered this
+app a candidate at all. The OS's own `MimeTypeMap`/MediaStore scanner
+resolves `.json` to `application/json` correctly on this device (checked via
+`content query --uri content://media/external/file`), so this isn't a
+system-wide mime.types gap — this specific file manager just builds its own
+share `Intent` with a different, legacy-but-real type.
+
+Fix: added a second `<data android:mimeType="text/x-json" />` inside the same
+`<intent-filter>` (multiple `<data>` elements under one filter OR together,
+they don't multiply against action/category). One-line manifest change, no
+Java or JS involved — `BackupImportPlugin` reads bytes via
+`ContentResolver#openInputStream`, which never inspected the MIME type
+anyway.
+
+Verified by repeating the exact real user flow end to end: pushed a test
+`.json` to `/sdcard/Download/`, drove "Gestionnaire de fichiers +" through
+its real long-press → Plus → Partager UI, and confirmed **LiureIPTV now
+appears** in the resulting share sheet alongside Bluetooth/LocalSend/VLC —
+tapping it cold-started the app (fresh PID) and the WebView console showed
+`BackupImport.addListener` firing with no errors.
+
+**General lesson for this exact bug shape**: when a share-target
+intent-filter mysteriously excludes an app, don't guess at alternate MIME
+strings — reproduce through the REAL sending app's actual UI and read
+`ChooserActivity`'s logcat line for `clip={...}`, which shows the type the
+system actually resolved. Guessing (`application/octet-stream`, `text/plain`
+were the leading candidates before checking) would likely have missed
+`text/x-json` entirely and looked like a fix while remaining broken for this
+device's actual file manager. Other file managers may use yet other
+variants — the same reproduce-via-real-UI-then-read-logcat method applies if
+this recurs with a different one.
+
 ## TV Interaction Reference
 
 D-pad behaviour, the four surfaces, the measured focus palette and the adoption
