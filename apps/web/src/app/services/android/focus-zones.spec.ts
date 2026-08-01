@@ -26,6 +26,46 @@ describe('focus zones', () => {
     });
 
     describe('resolveZone', () => {
+        it('gives each Settings section its own zone', () => {
+            // All eight sections share one scroll container; without this each
+            // one fell back to that shared container as its zone, so visiting
+            // Metadata silently discarded whatever was remembered for EPG —
+            // reported by the user, confirmed on the reference device.
+            build(`
+                <main>
+                    <section id="epg" class="settings-group"><button id="epgBtn"></button></section>
+                    <section id="tmdb" class="settings-group"><button id="tmdbBtn"></button></section>
+                </main>
+            `);
+
+            const epgZone = resolveZone(byId('epgBtn'));
+            const tmdbZone = resolveZone(byId('tmdbBtn'));
+
+            expect(epgZone).toBe(document.getElementById('epg'));
+            expect(tmdbZone).toBe(document.getElementById('tmdb'));
+            expect(epgZone).not.toBe(tmdbZone);
+        });
+
+        it('keeps each Settings section remembering its own position', () => {
+            build(`
+                <main>
+                    <section id="epg" class="settings-group"><button id="epgBtn"></button></section>
+                    <section id="tmdb" class="settings-group"><button id="tmdbBtn"></button></section>
+                </main>
+            `);
+            const epgBtn = withSize(byId('epgBtn'));
+            const tmdbBtn = withSize(byId('tmdbBtn'));
+            const memory = new ZoneMemory();
+
+            memory.remember(epgBtn);
+            memory.remember(tmdbBtn);
+
+            // Visiting tmdb must not have overwritten epg's remembered slot —
+            // the pre-fix behaviour, since both shared one zone.
+            expect(memory.recall(resolveZone(epgBtn))).toBe(epgBtn);
+            expect(memory.recall(resolveZone(tmdbBtn))).toBe(tmdbBtn);
+        });
+
         it('lets an explicit tag win over a nav nested inside it', () => {
             // This is what unifies the rail: it is tagged, but its sections are
             // separate <nav> islands, and <nav> matches the landmark selector

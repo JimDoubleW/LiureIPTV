@@ -21,7 +21,17 @@ const ZONE_ATTRIBUTE = 'data-tv-zone';
 
 const LANDMARK_SELECTOR =
     '[data-tv-zone], nav, aside, mat-sidenav, mat-nav-list, mat-toolbar,' +
-    ' [role="navigation"], [role="toolbar"], [role="listbox"], [role="tablist"]';
+    ' [role="navigation"], [role="toolbar"], [role="listbox"], [role="tablist"],' +
+    // Settings renders all eight of its sections (General/Playback/EPG/...)
+    // concatenated inside one shared scroll container, each in its own
+    // `<section id="epg" class="settings-group">`. Without this, every
+    // section's content fell back to that one outer container as its zone, so
+    // there was only ever one remembered position for the whole page: visiting
+    // a second section silently discarded the first section's memory instead
+    // of keeping the two independent. No `data-tv-zone` attribute is needed —
+    // each `<section>` is a distinct DOM node, and `zoneIdFor`'s WeakMap
+    // fallback already gives distinct nodes distinct ids.
+    ' section.settings-group';
 
 const zoneIds = new WeakMap<Element, string>();
 let nextZoneId = 0;
