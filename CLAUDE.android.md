@@ -694,6 +694,65 @@ device's actual file manager. Other file managers may use yet other
 variants — the same reproduce-via-real-UI-then-read-logcat method applies if
 this recurs with a different one.
 
+## Partial in-app rebrand: splash and welcome screen only
+
+The native Android identity (`applicationId com.liureiptv.tv`, launcher label,
+task-switcher title — `android/app/src/main/res/values/strings.xml`) was
+already "LiureIPTV" from the earlier fork rebrand. The Angular app's own UI
+text, shared verbatim across the Electron, PWA, and Android builds via
+`apps/web/src/index.html` and `apps/web/src/assets/i18n/*.json`, still said
+"IPTVnator" everywhere — deliberately left alone at the time, since renaming
+it is a separate decision from renaming the native shell.
+
+User asked to change what appears on screen to "LiureIPTV" and explicitly
+chose the narrowest option: the splash screen plus the two most-visible,
+purely-branding strings, in English and French only (the languages that
+matter for this device) — not a global find-replace across all 19 locale
+files.
+
+Changed:
+
+- `apps/web/src/index.html`: `<title>`, the splash's `aria-label`, and the
+  `.splash-mark` text.
+- `HOME.PLAYLISTS.WELCOME_TITLE` in `en.json`/`fr.json` — the big headline on
+  the empty-dashboard "add your first playlist" screen
+  (`empty-state.component.html`'s `'welcome-dashboard'` case), the first
+  screen a fresh install shows.
+- `apps/web-e2e/src/basic.e2e.ts`'s literal `page.title()` assertion, updated
+  to match.
+
+Deliberately left as "IPTVnator" — these strings name a specific, different
+thing, not "this app", and renaming them would make them wrong rather than
+on-brand:
+
+- `SETTINGS.EPG_NOTE` ("...available only in the electron-based version of
+  IPTVnator") — names the real upstream desktop app specifically, a distinct
+  product this fork doesn't replace.
+- `SETTINGS.ABOUT_SUBTITLE` / `SETTINGS.SUPPORT_DESCRIPTION` — the About
+  page's support links (GitHub Sponsors, Ko-fi, the GitHub repo link) all
+  point at `4gray`'s real accounts/upstream repo, not this fork's own; the
+  surrounding text correctly describes supporting *that* project.
+- `ABOUT.TITLE` ("About IPTVnator") — checked via grep, this key is unused by
+  any template (the real About page header uses `SETTINGS.ABOUT` = "About").
+  Left alone rather than "fixed", since it's dead text either way.
+
+**Consequence worth knowing**: `index.html` is the one shared file across all
+three build targets. This fork's Electron and PWA builds (if built from this
+same branch) will now also show "LiureIPTV" as the page title / splash —
+which is consistent with the fork's own identity, not a bug — but a few
+Electron-backend E2E tests elsewhere (`smoke.e2e.ts`,
+`embedded-mpv-frame-copy-packaged.e2e.ts`,
+`electron-test-fixtures.ts`, `xtream-renderer-capture.spec.ts`) still assert
+the literal string "IPTVnator" against the desktop window/page title. Left
+untouched — out of the Android port's scope per "Out Of Scope" above, and
+whether to rebrand the desktop build too is a separate decision nobody has
+made yet.
+
+If the broader, all-19-languages rebrand is ever wanted, the correct
+approach is NOT a blind `sed` replace: each occurrence needs the same
+"does this name *this app* or a specific different thing" judgment call
+applied above, repeated per language.
+
 ## TV Interaction Reference
 
 D-pad behaviour, the four surfaces, the measured focus palette and the adoption
