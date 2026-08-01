@@ -606,6 +606,48 @@ problem through ordinary Angular DI substitution instead, which generalises
 better for an in-repo plugin than adding a new stub file per custom plugin
 would.
 
+## Fixed Bug: Import button on Android silently did nothing
+
+Follow-up to the share-intent fix above, reported immediately after it shipped:
+"import ne marche pas". Confirmed on the reference device that the report was
+about the Settings **Import button itself**, not the new share-intent path —
+`adb shell dumpsys package` confirmed the share-target `<intent-filter>` was
+correctly registered, and CDP showed the app sitting on
+`/workspace/settings` with the Import button genuinely focused, no console
+errors.
+
+This was a real, if predictable, gap in the previous fix: the share-intent
+mechanism adds a **second**, working way to import, but does nothing to the
+**first**, obvious one — the button a user actually presses. It still calls
+`<input type="file">.click()`, which — for the exact reason the whole feature
+needed a share-intent workaround — cannot open Android's native picker from a
+D-pad-synthesized click. Before this fix, pressing it produced total silence:
+no error, no snackbar, nothing, which reads exactly like "the feature is
+broken" rather than "this button doesn't apply here, use the share sheet
+instead."
+
+Fix: `SettingsBackupFacade.importData()` now checks `isAndroidRuntime()` first
+and, on Android, skips the file input entirely — showing an instructional
+snackbar ("open your file manager, select the backup .json file, and share it
+into this app") via `SettingsSnackbarService.error()` (10s, dismissible, so
+it's readable at TV distance) instead of attempting a picker that can never
+open.
+
+**Verification note, worth remembering for this exact class of bug**: a first
+attempt to verify this on-device via a genuine `KEYCODE_DPAD_CENTER` appeared
+to fail — no snackbar showed. The real cause was test sequencing, not the
+fix: the previous test's snackbar was almost certainly still on screen (10s
+duration) and absorbed that OK press as its own dismiss action, rather than
+the Import button doing nothing. Reproduced cleanly after a full page reload:
+navigated the ENTIRE path with genuine hardware D-pad presses (not a
+CDP-forced `.focus()`) — General → UP ×3 to the Backup category → OK to
+select it → UP once more to reach the Import button, confirmed by a real
+visible focus ring in a screenshot — then a single genuine
+`KEYCODE_DPAD_CENTER` produced the instructional snackbar. General lesson:
+when re-testing a snackbar-driven interaction back to back, either wait out
+its duration or dismiss it explicitly before concluding the next press did
+nothing.
+
 ## TV Interaction Reference
 
 D-pad behaviour, the four surfaces, the measured focus palette and the adoption
