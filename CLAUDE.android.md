@@ -497,6 +497,115 @@ to the same static `moduleNameMapper` stub mechanism already used for
 immediately. Try `moduleNameMapper` first for a Capacitor plugin, not
 `unstable_mockModule`.
 
+## Fixed Bug: playlist backup import unreachable on Android
+
+Follow-up to the export fix above. The user asked "Et le Import alors ?" after
+export was fixed — same feature, opposite direction.
+
+Confirmed on the reference device with two independent input methods, to rule
+out a CDP-specific artifact before treating it as a real bug: a CDP `.click()`
+on Settings' Import button, and (separately) seeding real DOM focus on that
+button and sending a genuine ADB hardware key event
+(`input keyevent KEYCODE_DPAD_CENTER`). Both produced the identical result — the
+button visibly focused, nothing else happened, no file chooser ever appeared.
+
+Root cause: `importData()` opens Android's native file picker via
+`<input type="file">.click()`, which — like the Fullscreen API and the IME
+before it (see the EPG section and the base-facts entry on text input) —
+requires genuine user activation. A click dispatched from
+`WebView#evaluateJavascript` (how `MainActivity.dispatchKeyEvent` forwards every
+D-pad OK press to the JS engine) carries none, so the picker silently refuses
+to open. This makes Import structurally unreachable by remote regardless of how
+good D-pad navigation gets — no focus-engine fix could have solved this, unlike
+every other bug in this section.
+
+Fix, symmetric to the export share-sheet: register the app as an Android share
+target instead of asking for a picker. A file manager's "Share" action carries
+real OS-level user activation, sidestepping the chooser entirely.
+
+- `AndroidManifest.xml`: a second `<intent-filter>` on `MainActivity` for
+  `android.intent.action.SEND` + `application/json`, so the app appears in the
+  system share sheet for JSON files (matching exactly what `@capacitor/share`
+  produces for our own exported backup — the export→import round trip stays
+  internally consistent).
+- New custom Capacitor plugin, `BackupImportPlugin.java`
+  (`android/app/src/main/java/com/liureiptv/tv/`): overrides
+  `handleOnNewIntent(Intent)`, reads the shared file via
+  `ContentResolver#openInputStream` on `EXTRA_STREAM`, and calls
+  `notifyListeners("backupImportReceived", data, true)`. The `true`
+  (`retainUntilConsumed`) is what makes this simpler than it looks: Capacitor's
+  own `Plugin` base class buffers the event until a JS listener registers, so
+  there is no need to hand-roll Electron's pending/awaitingAck queue
+  (`playlist-open-request.ts`) — that machinery exists there because a
+  renderer can reload or crash independently of the main process; this
+  WebView has no equivalent failure mode to guard against.
+- One registration call, `registerPlugin(BackupImportPlugin.class)` in
+  `MainActivity.onCreate()` before `super.onCreate()` — no
+  `capacitor.plugins.json` entry needed, that mechanism is only for
+  auto-discovering npm-installed plugins during `cap sync`.
+- Cold start is covered for free: `BridgeActivity.load()` (Capacitor's own
+  base class, `capacitor/src/main/java/com/getcapacitor/BridgeActivity.java`)
+  replays the launch intent through `onNewIntent()` at the end of `onCreate()`,
+  so a share that cold-starts the app reaches the same
+  `handleOnNewIntent` override as one arriving while the app is already
+  running. Safe to treat both cases identically because `MainActivity` is
+  already `android:launchMode="singleTask"` — there is only ever one Activity
+  instance to receive either.
+- JS side: `AndroidBackupImportService` (`services/android/`), constructed
+  eagerly from `AppComponent`'s constructor next to `PlaylistOpenRequestService`
+  — same "start listening before anything can arrive" reasoning, same
+  `.start()`-is-a-no-op-off-platform shape. It subscribes to the plugin's
+  `backupImportReceived` event exactly once and hands the JSON straight to a
+  new shared `PlaylistBackupImportApplyService` (`services/`), which now holds
+  the import → Xtream-restore-reconcile → playlist-reload → summary-snackbar
+  logic previously inlined in `SettingsBackupFacade.importData()`'s file-input
+  handler — extracted so both entry points (the file picker and the share
+  intent) apply an imported backup identically, matching how
+  `PlaylistOpenRequestService` talks straight to the service layer rather than
+  through a page-scoped facade for the same "OS handed us content" shape.
+- The native plugin call is isolated behind an `InjectionToken`
+  (`BACKUP_IMPORT_PLUGIN`) rather than importing `registerPlugin` from
+  `@capacitor/core` directly into the service: calling a Capacitor plugin
+  method with no native or web implementation registered rejects
+  (`CapacitorException`), which is exactly what happens under Jest/jsdom
+  regardless of which platform `Capacitor.getPlatform()` is mocked to return —
+  there is no 'web' implementation for this plugin, so mocking the platform
+  alone does not fix it. The token lets `AndroidBackupImportService.spec.ts`
+  substitute a plain `jest.fn()`-based fake via `useValue`, never touching
+  Capacitor's real plugin-resolution proxy.
+
+Verified end to end on the reference device, both directions:
+
+- **Warm start**: with the app already open, `adb shell am start -a
+  android.intent.action.SEND -t application/json --eu
+  android.intent.extra.STREAM <content-uri> --grant-read-uri-permission -n
+  com.liureiptv.tv/.MainActivity` logged `Warning: Activity not started, intent
+  has been delivered to currently running top-most instance` (confirms
+  `onNewIntent`, not a new Activity) and the WebView console showed
+  `BackupImport.addListener` firing with the real file content, followed by
+  `PlaylistBackupImportApplyService`'s own summary/error logging.
+- **Cold start**: `am force-stop` followed by the identical `am start` command
+  launched a fresh process, and the same console sequence appeared once
+  Angular finished bootstrapping — proving `notifyListeners(..., true)`'s
+  retain-until-consumed behavior actually covers the gap between the native
+  intent landing and the JS listener registering.
+
+The `content://` URI in both tests came from this app's own already-declared
+`FileProvider` (`cache-path name="my_cache_images" path="."` in
+`file_paths.xml`, which maps the whole cache dir) pointing at a real backup
+already sitting there from the export fix's own on-device verification —
+exercising a genuine export→share→import round trip end to end, not a
+synthetic fixture.
+
+**Testing note, extending the one from the export fix**: the same
+`moduleNameMapper`-over-`unstable_mockModule` lesson applies here too, but
+manifests differently — this is a plugin this repo defines itself, not a
+third-party npm package, so there is no package specifier to redirect via
+`jest.config.ts`. The `InjectionToken` approach above solves the equivalent
+problem through ordinary Angular DI substitution instead, which generalises
+better for an in-repo plugin than adding a new stub file per custom plugin
+would.
+
 ## TV Interaction Reference
 
 D-pad behaviour, the four surfaces, the measured focus palette and the adoption
