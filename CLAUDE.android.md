@@ -306,6 +306,59 @@ Xtream aggregation page, which already returns `[]` via a doubly-guarded
 `DatabaseService` call and has no other path to populate an Xtream row on
 Android). Nothing else in that sweep changed behavior.
 
+## Fixed Bug: "Select playlist" menu unreachable by remote
+
+Reported by the user: opening the "Select playlist" dropdown, then unable to
+reach or activate "+ Add playlist" with the D-pad. Confirmed on the reference
+device: the menu opens (`aria-expanded="true"`, its `.cdk-overlay-pane`
+exists), but arrow keys and OK do nothing inside it.
+
+Root cause: this menu is a `mat-menu` used purely for positioning — its
+Search/Add-playlist buttons carry no ARIA role at all, not built from
+`[mat-menu-item]`. `isNativeControlOpen()` treated any open
+`.cdk-overlay-pane` (and, separately, any element inside a bare
+`[role="menu"]` container) as native-controlled and handed its keys to
+`document.activeElement`. But real focus never actually leaves the trigger
+for this panel — Angular Material only auto-focuses a panel's first item for
+a keyboard-*initiated* open, and this engine's OK always synthesizes a
+mouse-style click — and nothing inside the panel implements its own keydown
+handling either, since it has no registered Material menu items. So both
+buttons were being fed arrow keys and Enter meant for a panel they were never
+actually inside: completely unreachable.
+
+Fix, in `tv-navigation.ts`: `isNativeControlOpen()` now only defers to an
+overlay that actually contains `role="option"`/`"menuitem"`/`"slider"`
+descendants (real Material menuitems, mat-select's listbox, a slider) —
+`findUnmanagedOverlay()` identifies an open overlay without them, and `move()`
+scopes its own geometric search to it (its backdrop does not mark the rest of
+the page `aria-hidden`, so an unscoped search would still reach background
+content behind the dropdown). A bare `[role="menu"]` ancestor was removed
+from the "always defer" check entirely — the role sits on every `mat-menu`
+container regardless of what's inside it, so it never actually signalled
+whether there was real keyboard handling to defer to.
+
+Also fixed `goBack()`, found stale while investigating: it required an
+overlay to sit under a global `.cdk-overlay-container`, which this app's
+overlays never do (the same lesson the mat-select fix already recorded) — BACK
+could not close this menu, or any overlay, at all, falling straight through to
+the history/minimize branches instead.
+
+Verified end to end on the reference device with genuine D-pad key presses:
+Select playlist → OK opens the menu → DOWN, DOWN reaches "Add playlist" → OK
+opens the Add Playlist dialog. Regression coverage:
+`overlay-menu-keys.spec.ts` (new) plus a fixture fix in
+`mat-select-keys.spec.ts`, whose "confirm the highlighted option" test had an
+empty `.cdk-overlay-pane` that no longer matched real mat-select's actual
+shape (a `role="option"` child) once the check became precise about it.
+
+General lesson: `.cdk-overlay-pane` covers several unrelated widgets in this
+app (mat-select, real Material menus, and at least one mat-menu used as a
+plain positioning shell) — treating "an overlay is open" as one bucket keeps
+producing this exact bug shape. What decides whether this engine should hand
+off or drive it itself is whether the overlay's *content* has real ARIA roles
+Material's own key manager acts on, never the presence of the overlay or a
+`role="menu"` wrapper alone.
+
 ## TV Interaction Reference
 
 D-pad behaviour, the four surfaces, the measured focus palette and the adoption
