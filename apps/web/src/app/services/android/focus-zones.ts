@@ -31,7 +31,29 @@ const LANDMARK_SELECTOR =
     // of keeping the two independent. No `data-tv-zone` attribute is needed —
     // each `<section>` is a distinct DOM node, and `zoneIdFor`'s WeakMap
     // fallback already gives distinct nodes distinct ids.
-    ' section.settings-group';
+    ' section.settings-group,' +
+    // Every MatDialog's own content and action-button row, generically — not
+    // just the Add Playlist one this was found on. `mat-dialog-content`
+    // already got its own zone by accident whenever its form happened to
+    // overflow (isScrollContainer), but a short dialog's fields would not,
+    // and `mat-dialog-actions` never did: it has no overflow of its own, so
+    // it fell through every check straight to `document.body` — the same
+    // catch-all zone shared by anything else on the page with no landmark.
+    // Confirmed on the reference device: pressing DOWN from the Password
+    // field correctly found the geometrically-nearest button (Cancel), but
+    // since that button's zone (body) was a different zone than the
+    // password field's, the destination came from `memory.recall(body)`
+    // instead of the button itself — recalling whatever unrelated element
+    // had been remembered there last (the active method-selector card, an
+    // earlier-visited form field, or later, once a Cancel/Test
+    // Connection/Add button remembers itself in that same shared zone,
+    // occasionally the button geometry actually wanted, but from stale
+    // memory rather than by design), so every close-to-launch button became
+    // unreachable in favour of whatever ghost occupied `document.body`'s one
+    // shared slot. Both tags are genuine Angular Material custom elements,
+    // not app-specific classes, so this fixes the same shape in every
+    // dialog with an actions row, not just this one.
+    ' mat-dialog-content, mat-dialog-actions';
 
 const zoneIds = new WeakMap<Element, string>();
 let nextZoneId = 0;

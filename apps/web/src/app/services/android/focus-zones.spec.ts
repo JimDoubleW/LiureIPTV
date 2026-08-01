@@ -66,6 +66,60 @@ describe('focus zones', () => {
             expect(memory.recall(resolveZone(tmdbBtn))).toBe(tmdbBtn);
         });
 
+        it('gives a MatDialog\'s content and its action buttons separate zones', () => {
+            // Reported by the user: in the Add Playlist dialog's Xtream
+            // credentials form, DOWN from the Password field could not reach
+            // Cancel/Test Connection/Add at all. Root cause: mat-dialog-content
+            // only got its own zone by accident, when its fields happened to
+            // overflow (isScrollContainer) — a short dialog's fields would not
+            // — and mat-dialog-actions never did, since it has no overflow of
+            // its own. Both fell through to the same document.body catch-all
+            // shared by everything else on the page with no landmark.
+            build(`
+                <div class="cdk-overlay-pane">
+                    <mat-dialog-content>
+                        <input id="password" />
+                    </mat-dialog-content>
+                    <mat-dialog-actions>
+                        <button id="cancel">Cancel</button>
+                    </mat-dialog-actions>
+                </div>
+            `);
+
+            const contentZone = resolveZone(byId('password'));
+            const actionsZone = resolveZone(byId('cancel'));
+
+            expect(contentZone).toBe(document.querySelector('mat-dialog-content'));
+            expect(actionsZone).toBe(document.querySelector('mat-dialog-actions'));
+            expect(contentZone).not.toBe(document.body);
+            expect(actionsZone).not.toBe(document.body);
+        });
+
+        it("does not let an unrelated body-zone element hijack a dialog's action buttons", () => {
+            // Before the fix, mat-dialog-actions had no zone of its own and
+            // fell back to document.body — the same catch-all shared by
+            // anything else on the page with no landmark. Crossing into that
+            // zone from elsewhere recalled whatever had been remembered there
+            // last, e.g. a sidebar link with no landmark either, instead of
+            // the actions row's own geometrically-correct button.
+            build(`
+                <button id="strayLink">Some unrelated link</button>
+                <div class="cdk-overlay-pane">
+                    <mat-dialog-actions>
+                        <button id="cancel">Cancel</button>
+                    </mat-dialog-actions>
+                </div>
+            `);
+            const strayLink = withSize(byId('strayLink'));
+            const cancel = withSize(byId('cancel'));
+            const memory = new ZoneMemory();
+
+            memory.remember(strayLink);
+
+            expect(memory.recall(resolveZone(cancel))).not.toBe(strayLink);
+            expect(memory.recall(resolveZone(cancel))).toBeNull();
+        });
+
         it('lets an explicit tag win over a nav nested inside it', () => {
             // This is what unifies the rail: it is tagged, but its sections are
             // separate <nav> islands, and <nav> matches the landmark selector
