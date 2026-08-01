@@ -75,7 +75,9 @@ describe('native key dispatch and mat-select-style overlays', () => {
     it('dispatches Enter, not a synthetic click, to confirm the highlighted option', () => {
         document.body.innerHTML = `
             <mat-select role="combobox" tabindex="0"></mat-select>
-            <div class="cdk-overlay-pane"></div>
+            <div class="cdk-overlay-pane">
+                <div role="option" id="mat-option-1"></div>
+            </div>
         `;
         const select = document.querySelector('mat-select') as HTMLElement;
         select.focus();

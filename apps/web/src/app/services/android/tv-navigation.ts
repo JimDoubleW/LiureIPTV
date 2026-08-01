@@ -112,9 +112,28 @@ function dispatchRealKey(key: string, target: EventTarget): void {
  * `select`/`[role="slider"]` are the same kind of case for a plain native
  * `<select>` or a slider: both drive their own value via real keydown handling
  * that this engine would otherwise short-circuit.
+ *
+ * Deliberately **not** included here: a bare `[role="menu"]` ancestor. A
+ * `mat-menu` panel always carries that role on its own container regardless
+ * of what is inside it, and confirmed on the reference device, the "Select
+ * playlist" menu's Search/Add-playlist buttons carry no ARIA role at all (the
+ * panel is a `mat-menu` used purely for positioning, not built from
+ * `[mat-menu-item]`). Treating "inside a role=menu container" as reason
+ * enough to defer breaks two ways at once for that panel: real focus never
+ * moves off the trigger into it in the first place (Angular Material only
+ * auto-focuses a panel's first item for a keyboard-*initiated* open, and this
+ * engine's OK always synthesizes a mouse-style click), and even after this
+ * engine's own geometric search moves focus onto one of its buttons, nothing
+ * inside the panel implements its own arrow-key handling to hand off to
+ * either — both buttons were completely unreachable. Whether a `role="menu"`
+ * container actually has real Material keyboard handling to defer to is
+ * decided by `overlayHasNativeKeyboardHandling` below (its own `menuitem`
+ * children), not by the role on the container itself. `move()` scopes its
+ * own search to a panel with no such children instead — see
+ * `findUnmanagedOverlay`.
  */
 function isNativeControlOpen(active: Element | null): boolean {
-    if (active?.closest('[role="menu"], [role="slider"], select')) {
+    if (active?.closest('[role="slider"], select')) {
         return true;
     }
 
@@ -127,7 +146,32 @@ function isNativeControlOpen(active: Element | null): boolean {
     // passed in tests (jsdom fixtures had assumed the same wrong shape). The
     // element is confirmed removed from the DOM on close, not merely hidden,
     // so matching it anywhere in the document carries no stale-match risk.
-    return document.querySelector('.cdk-overlay-pane') !== null;
+    const overlay = document.querySelector('.cdk-overlay-pane');
+    return overlay !== null && overlayHasNativeKeyboardHandling(overlay);
+}
+
+/**
+ * The open `.cdk-overlay-pane` with no ARIA role (`option`/`menuitem`/
+ * `slider`) among its content, or `null` if none is open or the open one owns
+ * its own keyboard handling (mat-select's listbox, a real `[mat-menu-item]`
+ * menu). `move()` scopes candidate search to this element: the overlay's
+ * backdrop does not mark the rest of the page `aria-hidden`, so without a
+ * scoped search, background content behind the dropdown would still be a
+ * valid, reachable candidate.
+ */
+function findUnmanagedOverlay(): HTMLElement | null {
+    const overlay = document.querySelector<HTMLElement>('.cdk-overlay-pane');
+    if (!overlay || overlayHasNativeKeyboardHandling(overlay)) {
+        return null;
+    }
+    return overlay;
+}
+
+function overlayHasNativeKeyboardHandling(overlay: Element): boolean {
+    return (
+        overlay.querySelector('[role="option"], [role="menuitem"], [role="slider"]') !==
+        null
+    );
 }
 
 const memory = new ZoneMemory();
@@ -275,7 +319,15 @@ function move(direction: TvDirection): boolean {
         return true;
     }
 
-    const candidates = collectCandidates().filter(
+    // An open overlay with no native keyboard handling of its own (see
+    // findUnmanagedOverlay) has no other mechanism to move focus among its
+    // content, so this engine's own search is confined to it — otherwise
+    // background content, which the overlay's backdrop does not mark
+    // `aria-hidden`, would still be a reachable candidate right behind it.
+    const overlay = findUnmanagedOverlay();
+    const searchRoot: ParentNode = overlay ?? document;
+
+    const candidates = collectCandidates(searchRoot).filter(
         (candidate) =>
             candidate.target !== origin &&
             isRegionCrossingAllowed(origin, candidate.target, direction)
@@ -295,7 +347,7 @@ function move(direction: TvDirection): boolean {
         if (scrollToReveal(origin, direction)) {
             const revealed = findBestCandidate(
                 origin.getBoundingClientRect(),
-                collectCandidates().filter(
+                collectCandidates(searchRoot).filter(
                     (c) =>
                         c.target !== origin &&
                         isRegionCrossingAllowed(origin, c.target, direction)
@@ -439,10 +491,12 @@ function goBack(): void {
         return;
     }
 
-    const overlay = document.querySelector(
-        '.cdk-overlay-container .cdk-overlay-pane'
-    );
-    if (overlay) {
+    // Same lesson as isNativeControlOpen: this app's overlays are not
+    // appended under a global `.cdk-overlay-container`, so requiring that
+    // ancestor silently never matched — BACK could not close a `mat-select`
+    // or menu at all, falling straight through to the history/minimize
+    // branches below instead.
+    if (document.querySelector('.cdk-overlay-pane')) {
         dispatchRealKey('Escape', document.body);
         return;
     }
