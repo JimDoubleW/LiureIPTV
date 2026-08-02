@@ -15,6 +15,7 @@ import {
     CrossPortalSimilarService,
     DownloadsService,
     PlaybackPositionRuntimeBridgeService,
+    RuntimeCapabilitiesService,
     SettingsStore,
 } from '@iptvnator/services';
 import {
@@ -81,6 +82,9 @@ describe('VodDetailsRouteComponent fallback actions', () => {
     const isEmbeddedPlayer = jest.fn().mockReturnValue(true);
     const openResolvedPlayback = jest.fn();
     const startDownload = jest.fn().mockResolvedValue(undefined);
+    const isDownloaded = jest.fn().mockReturnValue(false);
+    const getDownloadByContent = jest.fn();
+    const playDownload = jest.fn();
     const toggleFavorite = jest.fn();
     const sparseItem = (): SparseVodItem => ({
         info: [],
@@ -107,6 +111,9 @@ describe('VodDetailsRouteComponent fallback actions', () => {
         isEmbeddedPlayer.mockReset().mockReturnValue(true);
         openResolvedPlayback.mockClear();
         startDownload.mockClear();
+        isDownloaded.mockReset().mockReturnValue(false);
+        getDownloadByContent.mockReset();
+        playDownload.mockReset();
         toggleFavorite.mockClear();
         await TestBed.configureTestingModule({
             imports: [VodDetailsRouteComponent],
@@ -167,14 +174,18 @@ describe('VodDetailsRouteComponent fallback actions', () => {
                     useValue: {
                         isAvailable: downloadsAvailable,
                         downloads,
-                        isDownloaded: jest.fn().mockReturnValue(false),
+                        isDownloaded,
                         isDownloading: jest.fn().mockReturnValue(false),
                         isPaused: jest.fn().mockReturnValue(false),
                         resumeDownloadByContent: jest.fn(),
                         startDownload,
-                        getDownloadedFilePath: jest.fn(),
-                        playDownload: jest.fn(),
+                        getDownloadByContent,
+                        playDownload,
                     },
+                },
+                {
+                    provide: RuntimeCapabilitiesService,
+                    useValue: { isAndroid: true },
                 },
                 {
                     provide: PORTAL_PLAYER,
@@ -330,6 +341,48 @@ describe('VodDetailsRouteComponent fallback actions', () => {
         expect(inlinePlayer.playback()).toEqual(
             expect.objectContaining({ startTime: 42 })
         );
+    });
+
+    it('plays a completed Android download through the inline native path', async () => {
+        const item = sparseItem();
+        selectedItem.set(item);
+        downloadsAvailable.set(true);
+        isDownloaded.mockReturnValue(true);
+        getDownloadByContent.mockReturnValue({
+            id: 1,
+            playlistId: 'playlist-1',
+            xtreamId: 650020,
+            contentType: 'vod',
+            title: 'Downloaded movie',
+            url: 'https://example.com/movie.mp4',
+            posterUrl: 'https://example.com/poster.jpg',
+            status: 'completed',
+            filePath: 'content://media/external/downloads/42',
+        });
+        fixture.detectChanges();
+
+        const host = fixture.nativeElement as HTMLElement;
+        host.querySelector<HTMLButtonElement>(
+            'button.download-btn--completed'
+        )?.click();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        const inlinePlayer = fixture.debugElement.query(
+            By.directive(StubPortalInlinePlayerComponent)
+        ).componentInstance as StubPortalInlinePlayerComponent;
+        expect(inlinePlayer.playback()).toEqual({
+            streamUrl: 'content://media/external/downloads/42',
+            title: 'Downloaded movie',
+            thumbnail: 'https://example.com/poster.jpg',
+            isLive: false,
+            contentInfo: {
+                playlistId: 'playlist-1',
+                contentXtreamId: 650020,
+                contentType: 'vod',
+            },
+        });
+        expect(playDownload).not.toHaveBeenCalled();
     });
 
     it('keeps external playback in the browse shell', () => {

@@ -1,8 +1,12 @@
 import { Injectable, Signal, computed, inject, signal } from '@angular/core';
 import { XtreamStore } from '@iptvnator/portal/xtream/data-access';
-import { DownloadsService } from '@iptvnator/services';
+import {
+    DownloadsService,
+    RuntimeCapabilitiesService,
+} from '@iptvnator/services';
 import { resolveXtreamVodPlaybackSource } from '@iptvnator/portal/xtream/data-access';
 import { XtreamVodDetails } from '@iptvnator/shared/interfaces';
+import { VodDetailsPlaybackService } from './vod-details-playback.service';
 import { resolveXtreamVodPlaybackPresentation } from './vod-details-playback-presentation';
 
 /**
@@ -16,6 +20,8 @@ import { resolveXtreamVodPlaybackPresentation } from './vod-details-playback-pre
 export class VodDetailsDownloadsService {
     private readonly downloadsService = inject(DownloadsService);
     private readonly xtreamStore = inject(XtreamStore);
+    private readonly runtime = inject(RuntimeCapabilitiesService);
+    private readonly playback = inject(VodDetailsPlaybackService);
 
     private routeContentId: Signal<number> = signal(NaN);
 
@@ -117,14 +123,35 @@ export class VodDetailsDownloadsService {
             return;
         }
 
-        const filePath = this.downloadsService.getDownloadedFilePath(
+        const download = this.downloadsService.getDownloadByContent(
             this.routeContentId(),
             playlistId,
             'vod'
         );
-
-        if (filePath) {
-            await this.downloadsService.playDownload(filePath);
+        if (
+            !download ||
+            download.status !== 'completed' ||
+            !download.filePath
+        ) {
+            return;
         }
+        const filePath = download.filePath;
+
+        if (this.runtime.isAndroid) {
+            await this.playback.startResolvedPlayback({
+                streamUrl: filePath,
+                title: download.title,
+                thumbnail: download.posterUrl,
+                isLive: false,
+                contentInfo: {
+                    playlistId,
+                    contentXtreamId: this.routeContentId(),
+                    contentType: 'vod',
+                },
+            });
+            return;
+        }
+
+        await this.downloadsService.playDownload(filePath);
     }
 }
