@@ -1124,7 +1124,39 @@ UI control renders). The engine is an **unconditional override on Android**,
 not a Settings-selectable option — applied through the same `[playerOverride]`
 mechanism DASH already uses to force HTML5, with DASH still taking precedence
 over it (`.mpd` channels keep routing to the existing Shaka path even on
-Android; `isDashStreamUrl` guards every override site).
+Android; `isDashStreamUrl` guards it). The override is decided **once**, in
+`WebPlayerViewComponent.selectedPlayer`. It began as a copied computed in each
+live host, and the VOD/series host (`PortalInlinePlayerComponent`) simply never
+got a copy — so movies silently kept using the WebView this whole feature
+exists to avoid. An explicit `playerOverride` from a host still wins, which is
+what keeps DASH on Shaka.
+
+- **On-demand playback goes straight to a locked fullscreen.** Live plays
+  inline beside its channel list, whose panels carry their own backgrounds.
+  Movies and series play inside the detail page's theater stage, which stacks
+  four opaque layers over the player's rect — the stage black, the ambient
+  poster blur, the shell card, and the detail page background — and every one
+  of them hides a surface composited behind the WebView. Fullscreen blanks the
+  shell with `visibility`, so nothing paints over the video.
+  `AndroidNativePlayerComponent` sets `TV_FULLSCREEN_ATTRIBUTE` plus
+  `TV_FULLSCREEN_LOCKED_ATTRIBUTE` for the session; `exitFullscreen()` refuses
+  while locked, so BACK falls through to history and closes the player instead
+  of uncovering a stage with invisible video still playing behind it.
+- **Two traps cost real time getting that fullscreen to fill the screen**, both
+  in `tv-focus.styles.ts`, and both invisible in the computed style:
+  `//` line comments are not CSS — the parser treats one as a bad declaration
+  and swallows everything up to the next `;`, which silently ate the `width`
+  right after it. And the detail shell's browse-to-watch **animation stays
+  attached to `.shell__player`**: an animated or transformed element becomes
+  the containing block for its fixed-position descendants, so the player
+  reported `position: fixed` with `top: 0` yet laid out at the workspace grid's
+  origin. Neither shows up as a wrong computed value — only the measured rect
+  disagrees.
+- **The screen stays awake while playing.** `FLAG_KEEP_SCREEN_ON` is held only
+  while ExoPlayer reports `isPlaying`, mirroring the desktop engine's
+  `powerSaveBlocker`, so a paused film still lets the TV sleep. Without it the
+  screensaver takes over mid-film — it interrupted this port's own testing
+  twice before being noticed.
 
 - **Compositing: punch-through, as originally planned.** `attach()` inserts
   the `SurfaceView` at index 0 of

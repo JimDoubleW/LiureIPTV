@@ -753,7 +753,10 @@ describe('VideoPlayerComponent', () => {
         stub = fixture.debugElement.query(
             By.directive(StubWebPlayerViewComponent)
         ).componentInstance as StubWebPlayerViewComponent;
-        expect(stub.playerOverride()).toBe(VideoPlayer.VideoJs);
+        // No override off DASH: this host only has an opinion about .mpd.
+        // Everything else is the wrapper's call — the stored setting, or the
+        // native engine on Android.
+        expect(stub.playerOverride()).toBeNull();
     });
 
     it('passes remote volume changes to the radio audio player', () => {

@@ -3,6 +3,7 @@ package com.liureiptv.tv;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.view.WindowManager;
 
 import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
@@ -78,6 +79,7 @@ public class AndroidNativePlayerPlugin extends Plugin {
 
         @Override
         public void onIsPlayingChanged(boolean isPlaying) {
+            keepScreenOn(isPlaying);
             pushSnapshotIfChanged();
         }
 
@@ -240,7 +242,30 @@ public class AndroidNativePlayerPlugin extends Plugin {
         getActivity().runOnUiThread(this::disposeInternal);
     }
 
+    /**
+     * Watching a film involves no input for two hours, so without this the
+     * TV's screensaver takes the screen mid-playback. ExoPlayer does not do
+     * this for us — the flag belongs to the window, which the plugin does not
+     * own. Mirrors the desktop engine's `powerSaveBlocker`, which is likewise
+     * held only while something is actually playing rather than for the whole
+     * session, so a film left paused overnight still lets the screen sleep.
+     */
+    private void keepScreenOn(boolean keepOn) {
+        getActivity().runOnUiThread(() -> {
+            if (keepOn) {
+                getActivity()
+                        .getWindow()
+                        .addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            } else {
+                getActivity()
+                        .getWindow()
+                        .clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            }
+        });
+    }
+
     private void disposeInternal() {
+        keepScreenOn(false);
         stopPositionPolling();
 
         if (player != null) {

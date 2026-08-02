@@ -42,7 +42,7 @@ export * from './lib/store-keys.enum';
 export * from './lib/stream-format.enum';
 export * from './lib/catalog-title-match.interface';
 export * from './lib/theme.enum';
-export * from './lib/native-video-punch-through.util';
+export * from './lib/android-tv-dom.util';
 export * from './lib/season-marker.util';
 export * from './lib/title-normalization.util';
 export * from './lib/tmdb.interface';

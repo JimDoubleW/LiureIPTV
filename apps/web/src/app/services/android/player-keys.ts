@@ -1,3 +1,7 @@
+import {
+    TV_FULLSCREEN_ATTRIBUTE,
+    TV_FULLSCREEN_LOCKED_ATTRIBUTE,
+} from '@iptvnator/shared/interfaces';
 import type { TvDirection } from './spatial-geometry';
 
 /**
@@ -22,8 +26,10 @@ import type { TvDirection } from './spatial-geometry';
  * component is modified.
  */
 
-/** Set while the player owns the whole screen; the stylesheet keys off it. */
-export const TV_FULLSCREEN_ATTRIBUTE = 'data-tv-fullscreen';
+// Re-exported so this module stays the one place the TV key contract is read
+// from; the constants themselves live in a lib because the player that sets
+// them cannot import `apps/web`.
+export { TV_FULLSCREEN_ATTRIBUTE, TV_FULLSCREEN_LOCKED_ATTRIBUTE };
 
 const PLAYER_VIEW_SELECTOR = 'app-web-player-view';
 const CHANNEL_ROW_SELECTOR = '.channel-list-item';
@@ -68,8 +74,21 @@ export function enterFullscreen(): boolean {
     return true;
 }
 
+/** True while fullscreen is the only layout that can show the picture. */
+export function isTvFullscreenLocked(): boolean {
+    return document.documentElement.hasAttribute(
+        TV_FULLSCREEN_LOCKED_ATTRIBUTE
+    );
+}
+
+/**
+ * Returns false when there was nothing to exit — and also when exiting is not
+ * allowed, so BACK falls through to its history branch and closes the player
+ * rather than uncovering a stage with invisible video playing behind it. See
+ * {@link TV_FULLSCREEN_LOCKED_ATTRIBUTE}.
+ */
 export function exitFullscreen(): boolean {
-    if (!isTvFullscreen()) {
+    if (!isTvFullscreen() || isTvFullscreenLocked()) {
         return false;
     }
     document.documentElement.removeAttribute(TV_FULLSCREEN_ATTRIBUTE);
@@ -126,7 +145,9 @@ export function handleFullscreenDirection(direction: TvDirection): boolean {
 
     if (direction === 'left') {
         // The benchmark's LEFT reveals the channel list over the video; the
-        // closest structural equivalent is returning to the list layout.
+        // closest structural equivalent is returning to the list layout. When
+        // fullscreen is locked there is no list to return to — the key is
+        // still swallowed so the WebView cannot act on it.
         exitFullscreen();
         return true;
     }

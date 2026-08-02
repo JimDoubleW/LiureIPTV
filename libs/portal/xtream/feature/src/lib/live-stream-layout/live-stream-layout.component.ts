@@ -65,10 +65,7 @@ import { LiveEpgPanelSummary } from '@iptvnator/ui/shared-portals';
 import {
     EpgItem,
     EpgProgram,
-    ResolvedPortalPlayback,
-    VideoPlayer,
 } from '@iptvnator/shared/interfaces';
-import { isDashStreamUrl } from '@iptvnator/shared/m3u-utils';
 import { PortalChannelsListComponent } from '../portal-channels-list/portal-channels-list.component';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { RuntimeCapabilitiesService, SettingsStore } from '@iptvnator/services';
@@ -286,21 +283,6 @@ export class LiveStreamLayoutComponent implements OnInit, OnDestroy {
     readonly activePlayback = this.livePlaybackMemory.playback;
     readonly activeStreamUrl = computed(
         () => this.activePlayback()?.streamUrl ?? ''
-    );
-    /**
-     * Native ExoPlayer is an unconditional override on Android — "from the
-     * start, not a fallback" — not a Settings-selectable choice, since the
-     * WebView-based engines are known-broken there (4K plays audio-only).
-     * This is the primary Live TV category-browsing view (`unified-live-tab`
-     * is the separate Global Favorites/Recent one and carries its own copy
-     * of this same override). `isDashStreamUrl` is cheap insurance against a
-     * rare `.mpd` portal live URL reaching ExoPlayer, which has no
-     * DRM/ClearKey support in this phase.
-     */
-    readonly androidNativePlayerOverride = computed<VideoPlayer | null>(() =>
-        this.runtime.isAndroid && !isDashStreamUrl(this.activeStreamUrl())
-            ? VideoPlayer.AndroidNative
-            : null
     );
     favorites = new Map<number, boolean>();
 

@@ -95,10 +95,34 @@ const TV_FOCUS_CSS = `
  * requestFullscreen rejects without one — so the player host is simply pinned
  * over everything. Same visual result, zero permissions involved.
  */
+/*
+ * The VOD detail shell animates the browse-to-watch morph, and the animation
+ * stays attached to this element afterwards. An element that is transformed
+ * OR animated becomes the containing block for its fixed-position
+ * descendants, so the fullscreen player below was pinned to the stage rather
+ * than the screen — computed position fixed and top 0, yet laid out at the
+ * shell's grid origin with bare window background all around it. Both the
+ * leftover identity transform and the animation have to go.
+ */
+[data-tv-nav][${TV_FULLSCREEN_ATTRIBUTE}] .shell__player {
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+}
+
 [data-tv-nav][${TV_FULLSCREEN_ATTRIBUTE}] app-web-player-view {
     position: fixed !important;
     inset: 0 !important;
     z-index: 2147483000 !important;
+    /* The VOD stage sizes this element explicitly to the largest 16:9 box
+     * that fits it, and an explicit width/height beats inset — without
+     * these the fullscreen player kept the stage's dimensions and sat in
+     * the middle of the screen, surrounded by bare window background. */
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
 }
 
 /*

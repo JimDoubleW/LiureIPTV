@@ -41,9 +41,7 @@ import {
     EpgProgram,
     ResolvedPortalPlayback,
     StalkerPortalItem,
-    VideoPlayer,
 } from '@iptvnator/shared/interfaces';
-import { isDashStreamUrl } from '@iptvnator/shared/m3u-utils';
 import {
     EpgDateNavigationDirection,
     EpgListViewComponent,
@@ -270,19 +268,6 @@ export class StalkerLiveStreamLayoutComponent implements OnDestroy {
     );
     readonly activePlayback = signal<ResolvedPortalPlayback | null>(null);
     readonly streamUrl = computed(() => this.activePlayback()?.streamUrl ?? '');
-    /**
-     * Native ExoPlayer is an unconditional override on Android — "from the
-     * start, not a fallback" — not a Settings-selectable choice, since the
-     * WebView-based engines are known-broken there (4K plays audio-only).
-     * `isDashStreamUrl` is cheap insurance against a rare `.mpd` portal live
-     * URL reaching ExoPlayer, which has no DRM/ClearKey support in this
-     * phase.
-     */
-    readonly androidNativePlayerOverride = computed<VideoPlayer | null>(() =>
-        this.runtime.isAndroid && !isDashStreamUrl(this.streamUrl())
-            ? VideoPlayer.AndroidNative
-            : null
-    );
     readonly activePlaybackTitle = computed(
         () =>
             this.activePlayback()?.title ||

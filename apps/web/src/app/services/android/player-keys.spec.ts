@@ -5,6 +5,7 @@ import {
     isActiveChannelRow,
     isInsidePlayer,
     TV_FULLSCREEN_ATTRIBUTE,
+    TV_FULLSCREEN_LOCKED_ATTRIBUTE,
     zapAdjacent,
 } from './player-keys';
 
@@ -20,6 +21,9 @@ describe('player keys', () => {
     afterEach(() => {
         document.body.innerHTML = '';
         document.documentElement.removeAttribute(TV_FULLSCREEN_ATTRIBUTE);
+        document.documentElement.removeAttribute(
+            TV_FULLSCREEN_LOCKED_ATTRIBUTE
+        );
     });
 
     describe('layout fullscreen', () => {
@@ -57,6 +61,32 @@ describe('player keys', () => {
             expect(
                 document.documentElement.hasAttribute(TV_FULLSCREEN_ATTRIBUTE)
             ).toBe(true);
+        });
+
+        it('refuses to leave a locked fullscreen, so BACK closes the player instead', () => {
+            // On-demand playback has no inline layout that can show the
+            // picture — the theater stage paints over a surface composited
+            // behind the WebView. Exiting would leave invisible video
+            // playing, so exitFullscreen() declines and the caller's next
+            // branch (history) takes over.
+            document.body.innerHTML =
+                '<app-web-player-view><app-android-native-player>' +
+                '</app-android-native-player></app-web-player-view>';
+            enterFullscreen();
+            document.documentElement.setAttribute(
+                TV_FULLSCREEN_LOCKED_ATTRIBUTE,
+                ''
+            );
+
+            expect(exitFullscreen()).toBe(false);
+            expect(
+                document.documentElement.hasAttribute(TV_FULLSCREEN_ATTRIBUTE)
+            ).toBe(true);
+
+            document.documentElement.removeAttribute(
+                TV_FULLSCREEN_LOCKED_ATTRIBUTE
+            );
+            expect(exitFullscreen()).toBe(true);
         });
 
         it('reports nothing to exit when not fullscreen', () => {

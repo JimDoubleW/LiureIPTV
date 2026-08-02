@@ -13,6 +13,8 @@ import {
     AndroidNativePlayerSnapshot,
     NATIVE_VIDEO_PUNCH_THROUGH_CLASS,
     ResolvedPortalPlayback,
+    TV_FULLSCREEN_ATTRIBUTE,
+    TV_FULLSCREEN_LOCKED_ATTRIBUTE,
 } from '@iptvnator/shared/interfaces';
 import { PlayerControlsComponent } from '../player-controls/player-controls.component';
 import type { PlayerMediaTitle } from '../player-controls/player-controls.model';
@@ -20,6 +22,7 @@ import type { SeriesPlaybackNavigation } from '../portal-inline-player/series-pl
 import { persistVolume, readStoredVolume } from './android-native-bounds.utils';
 import { AndroidNativeControlsAdapter } from './android-native-controls.adapter';
 import { AndroidNativeSessionController } from './android-native-session-controller';
+import { isLivePlayback } from './is-live-playback.util';
 
 /**
  * Host for the native Android video engine (ExoPlayer/Media3 behind
@@ -92,7 +95,21 @@ export class AndroidNativePlayerComponent {
             // player's rect — see workspace-shell.component.scss. Scoped to
             // the session because it makes the app's own backgrounds
             // transparent app-wide, revealing the (black) window behind.
-            document.documentElement.classList.add(NATIVE_VIDEO_PUNCH_THROUGH_CLASS);
+            const root = document.documentElement;
+            root.classList.add(NATIVE_VIDEO_PUNCH_THROUGH_CLASS);
+
+            // Live plays inline next to its channel list, whose panels carry
+            // their own backgrounds. Movies and series play inside the detail
+            // page's theater stage, which stacks four opaque layers over the
+            // player's rect — nothing composited behind the WebView can show
+            // through it — so those go straight to the locked fullscreen
+            // layout, where the shell is blanked and nothing paints over the
+            // video. See TV_FULLSCREEN_LOCKED_ATTRIBUTE.
+            const lockFullscreen = !isLivePlayback(playback);
+            if (lockFullscreen) {
+                root.setAttribute(TV_FULLSCREEN_ATTRIBUTE, '');
+                root.setAttribute(TV_FULLSCREEN_LOCKED_ATTRIBUTE, '');
+            }
 
             const teardown = this.controller.startSession(
                 host.nativeElement,
@@ -100,7 +117,11 @@ export class AndroidNativePlayerComponent {
                 readStoredVolume()
             );
             onCleanup(() => {
-                document.documentElement.classList.remove(NATIVE_VIDEO_PUNCH_THROUGH_CLASS);
+                root.classList.remove(NATIVE_VIDEO_PUNCH_THROUGH_CLASS);
+                if (lockFullscreen) {
+                    root.removeAttribute(TV_FULLSCREEN_ATTRIBUTE);
+                    root.removeAttribute(TV_FULLSCREEN_LOCKED_ATTRIBUTE);
+                }
                 teardown();
             });
         });

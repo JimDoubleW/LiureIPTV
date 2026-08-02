@@ -12,6 +12,7 @@ import {
     PlayerControlsState,
 } from '../player-controls/player-controls.model';
 import { readStoredVolume } from './android-native-bounds.utils';
+import { isLivePlayback } from './is-live-playback.util';
 import { AndroidNativeSessionController } from './android-native-session-controller';
 
 export interface AndroidNativeControlsContext {
@@ -42,7 +43,7 @@ export class AndroidNativeControlsAdapter implements PlayerController {
 
         return {
             ...DEFAULT_PLAYER_CAPABILITIES,
-            seek: !this.isLivePlayback(context.playback()),
+            seek: !isLivePlayback(context.playback()),
             volume: true,
             fullscreen: true,
         };
@@ -55,7 +56,7 @@ export class AndroidNativeControlsAdapter implements PlayerController {
         }
 
         const snapshot = this.controller.snapshot();
-        const isLive = this.isLivePlayback(context.playback());
+        const isLive = isLivePlayback(context.playback());
         const durationSeconds = isLive
             ? null
             : (snapshot?.durationSeconds ?? null);
@@ -92,13 +93,6 @@ export class AndroidNativeControlsAdapter implements PlayerController {
 
     configure(context: AndroidNativeControlsContext): void {
         this.configuredContext.set(context);
-    }
-
-    private isLivePlayback(playback: ResolvedPortalPlayback): boolean {
-        if (typeof playback.isLive === 'boolean') {
-            return playback.isLive;
-        }
-        return !playback.contentInfo;
     }
 
     private resolveStatusMessage(

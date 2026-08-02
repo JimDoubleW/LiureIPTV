@@ -23,6 +23,8 @@ import {
  * sides while the stylesheet stops matching.
  */
 const PUNCH_THROUGH_CLASS = 'native-video-punchthrough';
+const FULLSCREEN_ATTRIBUTE = 'data-tv-fullscreen';
+const FULLSCREEN_LOCKED_ATTRIBUTE = 'data-tv-fullscreen-locked';
 
 @Component({
     imports: [AndroidNativePlayerComponent],
@@ -74,6 +76,8 @@ describe('AndroidNativePlayerComponent punch-through', () => {
 
     afterEach(() => {
         document.documentElement.classList.remove(PUNCH_THROUGH_CLASS);
+        document.documentElement.removeAttribute(FULLSCREEN_ATTRIBUTE);
+        document.documentElement.removeAttribute(FULLSCREEN_LOCKED_ATTRIBUTE);
     });
 
     it('marks the document while a native session is active', () => {
@@ -97,6 +101,52 @@ describe('AndroidNativePlayerComponent punch-through', () => {
         // everywhere instead of the theme.
         expect(
             document.documentElement.classList.contains(PUNCH_THROUGH_CLASS)
+        ).toBe(false);
+    });
+
+    it('leaves live playback inline, where the channel list stays usable', () => {
+        fixture.detectChanges();
+
+        expect(
+            document.documentElement.hasAttribute(FULLSCREEN_ATTRIBUTE)
+        ).toBe(false);
+    });
+
+    it('sends on-demand playback straight to a locked fullscreen', () => {
+        // Movies and series play inside the detail page's theater stage,
+        // whose opaque layers hide a surface composited behind the WebView.
+        // Fullscreen blanks the shell, so it is the only layout that shows
+        // the picture — and leaving it would strand invisible video, hence
+        // the lock.
+        fixture.componentInstance.playback = {
+            streamUrl: 'https://example.test/movie/1001.mkv',
+            title: 'Example Movie',
+            isLive: false,
+        };
+        fixture.detectChanges();
+
+        expect(
+            document.documentElement.hasAttribute(FULLSCREEN_ATTRIBUTE)
+        ).toBe(true);
+        expect(
+            document.documentElement.hasAttribute(FULLSCREEN_LOCKED_ATTRIBUTE)
+        ).toBe(true);
+    });
+
+    it('releases the fullscreen lock when the session tears down', () => {
+        fixture.componentInstance.playback = {
+            streamUrl: 'https://example.test/movie/1001.mkv',
+            title: 'Example Movie',
+            isLive: false,
+        };
+        fixture.detectChanges();
+        fixture.destroy();
+
+        expect(
+            document.documentElement.hasAttribute(FULLSCREEN_ATTRIBUTE)
+        ).toBe(false);
+        expect(
+            document.documentElement.hasAttribute(FULLSCREEN_LOCKED_ATTRIBUTE)
         ).toBe(false);
     });
 });

@@ -198,16 +198,6 @@ export class VideoPlayerComponent implements OnInit, OnDestroy {
             ? VideoPlayer.ArtPlayer
             : VideoPlayer.Html5Player
     );
-    /**
-     * Native ExoPlayer is an unconditional override on Android — "from the
-     * start, not a fallback" — not a Settings-selectable choice, since the
-     * WebView-based engines are known-broken there (4K plays audio-only).
-     * DASH still wins outright when both apply: ExoPlayer has no
-     * DRM/ClearKey support in this phase.
-     */
-    readonly androidNativePlayerOverride = computed<VideoPlayer | null>(() =>
-        this.runtime.isAndroid ? VideoPlayer.AndroidNative : null
-    );
     /** Full multi-day programme window for the active channel (timeline). */
     readonly epgPrograms = toSignal(this.epgService.currentEpgPrograms$, {
         initialValue: [] as EpgProgram[],

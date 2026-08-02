@@ -27,6 +27,7 @@ import {
 } from '@iptvnator/shared/interfaces';
 import type { ExternalPlayerName } from '@iptvnator/shared/interfaces';
 import { RuntimeCapabilitiesService, SettingsStore } from '@iptvnator/services';
+import { isDashStreamUrl } from '@iptvnator/shared/m3u-utils';
 import { VodSourceRowComponent } from '@iptvnator/ui/components';
 
 /** How many recovery options the error screen shows before it stops helping. */
@@ -201,12 +202,33 @@ export class WebPlayerViewComponent {
             ? playback.isLive
             : !playback.contentInfo;
     });
-    readonly selectedPlayer = computed(
-        () =>
-            this.playerOverride() ??
-            this.settings()?.player ??
-            VideoPlayer.VideoJs
-    );
+    /**
+     * On Android the WebView engines cannot decode 4K IPTV streams — they play
+     * audio with no picture — so the native ExoPlayer engine is an
+     * unconditional override there rather than a Settings choice.
+     *
+     * Decided here rather than in each host: it was originally computed by the
+     * live views, and the VOD/series path (`PortalInlinePlayerComponent`)
+     * simply never passed it, so movies kept silently falling back to the
+     * broken WebView. One decision point cannot be half-adopted.
+     *
+     * An explicit `playerOverride` still wins, which is what keeps DASH on the
+     * Shaka path: `.mpd` needs ClearKey, and this engine has no DRM support.
+     * The URL test covers hosts that pass no override at all.
+     */
+    readonly selectedPlayer = computed(() => {
+        const explicitOverride = this.playerOverride();
+        if (explicitOverride) {
+            return explicitOverride;
+        }
+        if (
+            this.runtime.isAndroid &&
+            !isDashStreamUrl(this.resolvedPlayback().streamUrl)
+        ) {
+            return VideoPlayer.AndroidNative;
+        }
+        return this.settings()?.player ?? VideoPlayer.VideoJs;
+    });
     readonly resolvedMediaTitle = computed<PlayerMediaTitle | null>(() => {
         const explicit = this.mediaTitle();
         if (explicit?.primary?.trim()) {

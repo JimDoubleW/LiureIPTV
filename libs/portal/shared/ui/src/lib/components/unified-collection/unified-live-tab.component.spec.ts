@@ -591,7 +591,11 @@ describe('UnifiedLiveTabComponent', () => {
         if (!playback) {
             throw new Error('Expected wrapper playback to be set');
         }
-        expect(webPlayer.playerOverride()).toBe(VideoPlayer.VideoJs);
+        // No override: this host has no engine opinion, so the wrapper picks
+        // the engine itself — the stored setting everywhere, the native one on
+        // Android. Passing the stored player through here used to look
+        // harmless but made the host's value win over that decision.
+        expect(webPlayer.playerOverride()).toBeNull();
         expect(
             fixture.nativeElement.querySelector('app-vjs-player')
         ).toBeNull();
