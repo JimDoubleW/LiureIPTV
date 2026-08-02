@@ -470,16 +470,11 @@ export class DownloadsComponent {
             targetId,
             item.playlistId
         );
-        const categoryId = content?.category_id;
-
-        if (categoryId === null || categoryId === undefined) {
-            await this.router.navigate(
-                this.buildPlaylistRoute('xtream', item.playlistId, [
-                    contentType,
-                ])
-            );
-            return;
-        }
+        // Android does not expose Electron's content lookup bridge, so a
+        // download often has no cached category even though its Xtream id is
+        // sufficient to fetch the detail. Keep the detail route shape with a
+        // neutral category instead of dropping the user on the catalog list.
+        const categoryId = content?.category_id ?? 0;
 
         await this.router.navigate(
             this.buildPlaylistRoute('xtream', item.playlistId, [
