@@ -1170,6 +1170,14 @@ what keeps DASH on Shaka.
   `powerSaveBlocker`, so a paused film still lets the TV sleep. Without it the
   screensaver takes over mid-film — it interrupted this port's own testing
   twice before being noticed.
+- **Teardown silences before release.** Releasing a multi-gigabyte local
+  `content://` source can block for several seconds on the reference TV.
+  `AndroidNativeSessionController` therefore sends a separate `pause()` before
+  `dispose()`, and the native `disposeInternal()` defensively clears
+  play-when-ready, mutes, stops, and clears the surface before calling
+  `release()`. Do not collapse this back to release-only cleanup: the WebView
+  returns to the catalogue immediately, while Media3 may still be dismantling
+  the source, which otherwise leaves the film audible behind the UI.
 
 - **Compositing: punch-through, as originally planned.** `attach()` inserts
   the `SurfaceView` at index 0 of
@@ -1270,20 +1278,35 @@ The bridge keeps the renderer contract unchanged while delegating transfers to
 the OS `DownloadManager` through `AndroidDownloadsPlugin` and metadata to a
 separate WebView SQLite database (`liureiptv-downloads`).
 
-Downloads use the app-private external-files `downloads/` directory: no storage
-permission is required, transfers survive app restarts and connectivity loss,
-and uninstalling the app removes the files. Request `User-Agent`, `Referer` and
-`Origin` headers are persisted so retry can recreate portal requests. The
-bridge polls all active native ids in one call and only emits a renderer update
-when persisted state actually changes.
+Downloads are staged in the app-private external-files `downloads/` directory:
+no broad storage permission is required and transfers survive app restarts and
+connectivity loss. Change Folder opens Android's Storage Access Framework tree
+picker and persists the returned URI permission. Each new download snapshots
+the selected destination; after `DownloadManager` finishes, a background
+worker copies the staging file into that tree and the Downloads row remains
+active until the export completes. This staging step is required because
+`DownloadManager` cannot write directly to an arbitrary `content://` tree.
+Removing a row deletes both its staging file and its exported document.
+Some Android TV firmware, including the reference Mi Box, exposes only
+`com.android.tv.frameworkpackagestubs` for `ACTION_OPEN_DOCUMENT_TREE`; that
+activity immediately cancels instead of showing a picker. The plugin detects
+that stub before launch and presents a D-pad-native destination dialog instead.
+It offers app storage plus `Download/LiureIPTV` on every MediaStore volume
+(internal or mounted USB), without requesting broad all-files access.
+Request `User-Agent`, `Referer` and `Origin` headers are persisted so retry can
+recreate portal requests. The bridge polls all active native ids in one call
+and only emits a renderer update when persisted state actually changes.
 
 Android `DownloadManager` has no manual pause API. Pause therefore removes the
 native request and resume starts the file again from zero; the UI must not imply
-byte-range continuation. File-manager reveal and direct downloaded-file play
-remain deliberately unsupported by the bridge for now: users can navigate back
-to the source library item, while a later phase can route the local URI through
-the native player surface. The shared Downloads page hides its desktop-only
-Play and Reveal buttons on Android until that route exists.
+byte-range continuation. File-manager reveal remains unsupported by the bridge.
+From an Xtream movie detail, Play Local builds an inline
+`ResolvedPortalPlayback` around the persisted `file://` or `content://` URI;
+`WebPlayerViewComponent` selects Android native ExoPlayer, whose
+`DefaultDataSource` handles both URI schemes. The shared Downloads page still
+hides its desktop-only Play and Reveal buttons until generic list-to-player and
+episode-local-play routes exist. A newly selected folder applies to future
+downloads; already completed files are not moved.
 
 Verified end to end on the reference Mi Box S 3rd (Android 14/API 34): the
 native plugin registered at startup, the shared Downloads screen reported the
@@ -1299,7 +1322,11 @@ Download rows are explicit `data-tv-action-card`s with a
 inside the focused card's rectangle, so generic edge-based spatial scoring
 cannot enter them. `moveWithinActionCard()` owns local LEFT/RIGHT traversal:
 RIGHT enters and walks the controls, while LEFT from the first returns to the
-card. UP/DOWN remain ordinary geometric movement between download rows.
+card. UP/DOWN remain ordinary geometric movement between download rows. OK on
+the card opens the source movie or series detail. Android has no
+`dbGetContentByXtreamId` bridge, so Xtream navigation uses category `0` when
+the category cannot be recovered; the detail API only needs the content id,
+and falling back to the catalog list would violate the card's action.
 
 ## Out Of Scope
 

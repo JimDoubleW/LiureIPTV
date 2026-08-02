@@ -1085,5 +1085,12 @@ This fork carries an Android TV port on the `androidtv/main` branch. Its branch
 model, conflict-surface rules, target hardware and open decisions live in
 [`CLAUDE.android.md`](./CLAUDE.android.md) — read it before touching port code.
 Android downloads reuse the shared downloads UI through a partial bridge backed
-by the OS `DownloadManager` and WebView SQLite; pause resumes from zero, and
-direct local-file playback remains a later phase.
+by the OS `DownloadManager` and WebView SQLite. Android's document-tree picker
+selects a persistent destination; TV firmware without a real picker gets a
+native choice of app storage or `Download/LiureIPTV` on each available volume.
+Completed staging files are exported there, and OK on a download reopens its
+source movie or series detail. Play Local on an Xtream movie detail uses the
+native Android player; teardown pauses and stops ExoPlayer before its
+potentially slow release so no audio survives the return to the catalogue.
+Pause resumes from zero; generic list and episode-local playback remain later
+phases.
