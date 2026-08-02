@@ -37,6 +37,11 @@ export interface AndroidNativePlayerVolumeOptions {
     volume: number;
 }
 
+export interface AndroidNativePlayerAudioTrackOptions {
+    id: string;
+    trackId: number;
+}
+
 export interface AndroidNativePlayerSeekOptions {
     id: string;
     positionSeconds: number;
@@ -59,6 +64,7 @@ export interface AndroidNativePlayerPlugin {
     seek(options: AndroidNativePlayerSeekOptions): Promise<void>;
     setVolume(options: AndroidNativePlayerVolumeOptions): Promise<void>;
     setBounds(options: AndroidNativePlayerBoundsOptions): Promise<void>;
+    setAudioTrack(options: AndroidNativePlayerAudioTrackOptions): Promise<void>;
     dispose(options: AndroidNativePlayerIdOptions): Promise<void>;
     addListener(
         eventName: 'nativePlayerStatus',

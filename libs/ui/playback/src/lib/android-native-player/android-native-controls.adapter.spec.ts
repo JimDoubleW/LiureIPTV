@@ -34,6 +34,8 @@ function snapshot(
         durationSeconds: 100,
         volume: 0.65,
         isLive: false,
+        audioTracks: [],
+        selectedAudioTrackId: null,
         updatedAt: 1_700_000_000_000,
         ...overrides,
     };
@@ -48,6 +50,9 @@ function createController() {
         seekTo: jest.fn<Promise<void>, [number]>().mockResolvedValue(undefined),
         seekBy: jest.fn<Promise<boolean>, [number]>().mockResolvedValue(true),
         applyVolume: jest
+            .fn<Promise<void>, [number]>()
+            .mockResolvedValue(undefined),
+        setAudioTrack: jest
             .fn<Promise<void>, [number]>()
             .mockResolvedValue(undefined),
     };
@@ -103,7 +108,7 @@ describe('AndroidNativeControlsAdapter', () => {
         expect(adapter.capabilities()).toEqual(DEFAULT_PLAYER_CAPABILITIES);
     });
 
-    it('reports seek/volume/fullscreen for VOD and never tracks/speed/aspect/recording/PiP', () => {
+    it('reports seek/volume/fullscreen for VOD and never speed/aspect/recording/PiP', () => {
         configure();
 
         expect(adapter.capabilities()).toEqual({
@@ -199,11 +204,52 @@ describe('AndroidNativeControlsAdapter', () => {
         expect(controller.applyVolume).toHaveBeenCalledWith(0.2);
     });
 
+    it('offers no audio-track picker for a single track, which is not a choice', () => {
+        configure();
+        controller.snapshot.set(
+            snapshot({
+                audioTracks: [{ id: 0, label: 'French', selected: true }],
+                selectedAudioTrackId: 0,
+            })
+        );
+
+        expect(adapter.capabilities().audioTracks).toBe(false);
+    });
+
+    it('exposes the dub picker once the container reports more than one track', () => {
+        // The list is empty until the first samples are read, so this arrives
+        // well after playback starts rather than with the first snapshot.
+        configure();
+        controller.snapshot.set(
+            snapshot({
+                audioTracks: [
+                    { id: 0, label: 'French', selected: false },
+                    { id: 1, label: 'English', selected: true },
+                ],
+                selectedAudioTrackId: 1,
+            })
+        );
+
+        expect(adapter.capabilities().audioTracks).toBe(true);
+        expect(adapter.state().audioTracks).toEqual([
+            { id: 0, label: 'French', selected: false },
+            { id: 1, label: 'English', selected: true },
+        ]);
+        expect(adapter.state().selectedAudioTrackId).toBe(1);
+    });
+
+    it('delegates an audio-track choice to the controller', () => {
+        configure();
+
+        adapter.commands.setAudioTrack(1);
+
+        expect(controller.setAudioTrack).toHaveBeenCalledWith(1);
+    });
+
     it('no-ops every phase-2+ command', () => {
         configure();
 
         expect(() => {
-            adapter.commands.setAudioTrack(1);
             adapter.commands.setSubtitleTrack(-1);
             adapter.commands.setPlaybackSpeed(1.5);
             adapter.commands.setAspectRatio('16:9');

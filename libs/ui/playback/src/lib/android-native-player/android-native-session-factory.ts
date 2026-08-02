@@ -2,6 +2,7 @@ import {
     AndroidNativePlayerSnapshot,
     ResolvedPortalPlayback,
 } from '@iptvnator/shared/interfaces';
+import { isLivePlayback } from './is-live-playback.util';
 
 /**
  * Synthetic (`id: ''`) snapshots for the two windows where no real native
@@ -9,13 +10,6 @@ import {
  * `create()` call resolves) and a failed start. Mirrors
  * embedded-mpv-session-factory.ts's createLoadingSession/createErrorSession.
  */
-
-function isLivePlayback(playback: ResolvedPortalPlayback): boolean {
-    if (typeof playback.isLive === 'boolean') {
-        return playback.isLive;
-    }
-    return !playback.contentInfo;
-}
 
 export function createLoadingSnapshot(
     playback: ResolvedPortalPlayback,
@@ -28,6 +22,9 @@ export function createLoadingSnapshot(
         durationSeconds: null,
         volume,
         isLive: isLivePlayback(playback),
+        // Nothing has been demuxed yet, so there is no track list to report.
+        audioTracks: [],
+        selectedAudioTrackId: null,
         updatedAt: Date.now(),
     };
 }
@@ -44,6 +41,8 @@ export function createErrorSnapshot(
         durationSeconds: null,
         volume,
         isLive: isLivePlayback(playback),
+        audioTracks: [],
+        selectedAudioTrackId: null,
         updatedAt: Date.now(),
         error: error instanceof Error ? error.message : String(error),
     };

@@ -65,6 +65,14 @@ export class AndroidNativeCommandRunner {
         await this.guard(() => this.plugin.setVolume({ id, volume: value }));
     }
 
+    async setAudioTrack(trackId: number): Promise<void> {
+        const id = this.ctx.sessionId();
+        if (!id) {
+            return;
+        }
+        await this.guard(() => this.plugin.setAudioTrack({ id, trackId }));
+    }
+
     /**
      * Errors are intentionally swallowed: the session may have been torn
      * down, or the native side may have thrown, between the command

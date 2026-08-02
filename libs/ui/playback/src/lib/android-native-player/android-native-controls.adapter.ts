@@ -10,6 +10,7 @@ import {
     PlayerControlsCapabilities,
     PlayerControlsCommands,
     PlayerControlsState,
+    PlayerTrack,
 } from '../player-controls/player-controls.model';
 import { readStoredVolume } from './android-native-bounds.utils';
 import { isLivePlayback } from './is-live-playback.util';
@@ -46,7 +47,20 @@ export class AndroidNativeControlsAdapter implements PlayerController {
             seek: !isLivePlayback(context.playback()),
             volume: true,
             fullscreen: true,
+            // One track is not a choice, and the list is empty until the
+            // first samples are read — reporting the capability before then
+            // would render a menu button that opens onto nothing.
+            audioTracks: this.audioTracks().length > 1,
         };
+    });
+
+    private readonly audioTracks = computed<PlayerTrack[]>(() => {
+        const snapshot = this.controller.snapshot();
+        return (snapshot?.audioTracks ?? []).map((track) => ({
+            id: track.id,
+            label: track.label,
+            selected: track.selected,
+        }));
     });
 
     readonly state = computed<PlayerControlsState>(() => {
@@ -70,6 +84,8 @@ export class AndroidNativeControlsAdapter implements PlayerController {
             isLive,
             canSeek: !isLive && (durationSeconds ?? 0) > 0,
             volume: snapshot?.volume ?? readStoredVolume(),
+            audioTracks: this.audioTracks(),
+            selectedAudioTrackId: snapshot?.selectedAudioTrackId ?? null,
         };
     });
 
@@ -78,12 +94,12 @@ export class AndroidNativeControlsAdapter implements PlayerController {
         seekTo: (seconds) => void this.controller.seekTo(seconds),
         seekBy: (deltaSeconds) => void this.controller.seekBy(deltaSeconds),
         setVolume: (value) => void this.controller.applyVolume(value),
-        // Phase 2+: audio/subtitle tracks, playback speed, aspect override,
+        setAudioTrack: (id) => void this.controller.setAudioTrack(id),
+        // Phase 2+: subtitle tracks, playback speed, aspect override,
         // recording, and picture-in-picture all need real new Media3 API
-        // surface (TrackSelector, MediaDrm, a text renderer). Capabilities
-        // above already report each as unsupported, so the shared controls
-        // never render a button that reaches these no-ops.
-        setAudioTrack: () => undefined,
+        // surface (MediaDrm, a text renderer). Capabilities above already
+        // report each as unsupported, so the shared controls never render a
+        // button that reaches these no-ops.
         setSubtitleTrack: () => undefined,
         setPlaybackSpeed: () => undefined,
         setAspectRatio: () => undefined,

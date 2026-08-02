@@ -85,6 +85,8 @@ export class AndroidNativeSessionController {
         this.commands.seekBy(deltaSeconds);
     readonly applyVolume = (value: number): Promise<void> =>
         this.commands.applyVolume(value);
+    readonly setAudioTrack = (trackId: number): Promise<void> =>
+        this.commands.setAudioTrack(trackId);
 
     /**
      * Spin up a native session bound to `host`. Returns a teardown the

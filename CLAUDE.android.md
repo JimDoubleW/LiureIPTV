@@ -1152,6 +1152,19 @@ what keeps DASH on Shaka.
   reported `position: fixed` with `top: 0` yet laid out at the workspace grid's
   origin. Neither shows up as a wrong computed value — only the measured rect
   disagrees.
+- **Audio tracks are in scope, unlike the rest of phase 2.** IPTV VOD is
+  largely multi-language — "MULTI" in a title means several dubs — so shipping
+  the native engine without a dub picker would have made it a downgrade from
+  the WebView it replaces. ExoPlayer addresses a track by (group, index within
+  group); the shared controls contract carries one number, so
+  `buildAudioTracks()` flattens the groups and numbers by position, and
+  `applyAudioTrack()` walks the identical loop back. **Those two loops must
+  stay in step.** Tracks arrive well after `load()` — the list is empty until
+  the first samples are read — and neither their arrival nor a switch moves
+  status or position, so `onTracksChanged` plus a track signature in
+  `pushSnapshotIfChanged()` is what stops the snapshot's own change test from
+  dropping both. Verified on a three-dub release: labels came from the
+  provider's own `Format.label`, and switching kept playback running.
 - **The screen stays awake while playing.** `FLAG_KEEP_SCREEN_ON` is held only
   while ExoPlayer reports `isPlaying`, mirroring the desktop engine's
   `powerSaveBlocker`, so a paused film still lets the TV sleep. Without it the

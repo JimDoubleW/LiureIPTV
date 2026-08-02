@@ -6,16 +6,20 @@ import android.text.TextUtils;
 import android.view.WindowManager;
 
 import androidx.media3.common.C;
+import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
+import androidx.media3.common.TrackSelectionOverride;
+import androidx.media3.common.Tracks;
 import androidx.media3.datasource.DataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.exoplayer.source.MediaSource;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -38,10 +42,14 @@ import java.util.UUID;
  * the WebView + JS demuxing. ExoPlayer talks to the platform decoder and
  * built-in TsExtractor directly instead.
  *
+ * Audio-track switching is supported: IPTV VOD is largely multi-language
+ * ("MULTI" in the title means several dubs), so the native engine would have
+ * been a downgrade from the WebView without it.
+ *
  * Deliberately NOT in scope here (see the phase-1 plan): DRM/ClearKey,
- * subtitle rendering, audio-track switching, playback speed, aspect
- * override, recording, PiP. DASH/ClearKey channels never reach this plugin
- * — the JS side keeps those on the existing HTML5/Shaka path.
+ * subtitle rendering, playback speed, aspect override, recording, PiP.
+ * DASH/ClearKey channels never reach this plugin — the JS side keeps those
+ * on the existing HTML5/Shaka path.
  *
  * Every method marshals onto the UI thread: ExoPlayer must be built and
  * mutated on a single Looper thread, and SurfaceView/ViewGroup mutation is
@@ -60,6 +68,7 @@ public class AndroidNativePlayerPlugin extends Plugin {
     private String lastError;
 
     private String lastPushedStatus;
+    private String lastPushedTracksSignature;
     private long lastPushedPositionMillis = Long.MIN_VALUE;
 
     private final Handler positionPollHandler = new Handler(Looper.getMainLooper());
@@ -88,6 +97,15 @@ public class AndroidNativePlayerPlugin extends Plugin {
             lastError = error.getMessage();
             pushSnapshotIfChanged();
         }
+
+        @Override
+        public void onTracksChanged(Tracks tracks) {
+            // Tracks appear well after load() — the audio list is empty until
+            // the first samples are read — and change again on every switch,
+            // neither of which moves status or position, so the snapshot's
+            // own change test would drop both updates.
+            pushSnapshotIfChanged();
+        }
     };
 
     @PluginMethod
@@ -104,6 +122,7 @@ public class AndroidNativePlayerPlugin extends Plugin {
             sessionId = UUID.randomUUID().toString();
             lastError = null;
             lastPushedStatus = null;
+            lastPushedTracksSignature = null;
             lastPushedPositionMillis = Long.MIN_VALUE;
 
             player = new ExoPlayer.Builder(getContext()).build();
@@ -281,6 +300,7 @@ public class AndroidNativePlayerPlugin extends Plugin {
         sessionId = null;
         lastError = null;
         lastPushedStatus = null;
+        lastPushedTracksSignature = null;
         lastPushedPositionMillis = Long.MIN_VALUE;
     }
 
@@ -308,15 +328,19 @@ public class AndroidNativePlayerPlugin extends Plugin {
 
         String status = currentStatus();
         long positionMillis = player.getCurrentPosition();
+        JSArray audioTracks = buildAudioTracks();
+        String tracksSignature = audioTracks.toString();
         boolean statusChanged = !status.equals(lastPushedStatus);
         boolean positionChanged = Math.abs(positionMillis - lastPushedPositionMillis) >= 200;
+        boolean tracksChanged = !tracksSignature.equals(lastPushedTracksSignature);
 
-        if (!statusChanged && !positionChanged) {
+        if (!statusChanged && !positionChanged && !tracksChanged) {
             return;
         }
 
         lastPushedStatus = status;
         lastPushedPositionMillis = positionMillis;
+        lastPushedTracksSignature = tracksSignature;
 
         long durationMillis = player.getDuration();
         JSObject snapshot = new JSObject();
@@ -330,6 +354,8 @@ public class AndroidNativePlayerPlugin extends Plugin {
                         : durationMillis / 1000.0);
         snapshot.put("volume", player.getVolume());
         snapshot.put("isLive", isLive);
+        snapshot.put("audioTracks", audioTracks);
+        snapshot.put("selectedAudioTrackId", selectedAudioTrackId(audioTracks));
         // Epoch millis, not an ISO string: java.time.Instant needs API 26+
         // (this app's minSdk is 24, and core library desugaring isn't
         // enabled), and a plain number is all the JS side needs to compare
@@ -340,6 +366,107 @@ public class AndroidNativePlayerPlugin extends Plugin {
         }
 
         notifyListeners(EVENT_STATUS, snapshot, false);
+    }
+
+    /**
+     * The audio tracks, flattened across groups and numbered by their position
+     * in that flattening.
+     *
+     * ExoPlayer identifies a track by (group, index within group), which is
+     * two numbers; the shared controls contract carries one. The flattening
+     * order is stable for a given media item — it comes from the container —
+     * so the ordinal round-trips reliably, and {@link #applyAudioTrack} walks
+     * the identical loop to turn it back into a group and index. Any change to
+     * one loop must be mirrored in the other.
+     */
+    private JSArray buildAudioTracks() {
+        JSArray tracks = new JSArray();
+        if (player == null) {
+            return tracks;
+        }
+
+        int id = 0;
+        for (Tracks.Group group : player.getCurrentTracks().getGroups()) {
+            if (group.getType() != C.TRACK_TYPE_AUDIO) {
+                continue;
+            }
+            for (int i = 0; i < group.length; i++) {
+                JSObject track = new JSObject();
+                track.put("id", id);
+                track.put("label", audioTrackLabel(group.getTrackFormat(i), id));
+                track.put("selected", group.isTrackSelected(i));
+                tracks.put(track);
+                id++;
+            }
+        }
+        return tracks;
+    }
+
+    /**
+     * Display name for one audio track. Providers rarely fill in a title, so
+     * the language is what users actually pick by — a MULTI release is a list
+     * of dubs. Falls back to a bare ordinal rather than a codec name: knowing
+     * a track is AC3 does not help anyone choose it.
+     */
+    private String audioTrackLabel(Format format, int ordinal) {
+        if (format.label != null && !format.label.trim().isEmpty()) {
+            return format.label;
+        }
+
+        String language = format.language;
+        if (language != null && !language.isEmpty() && !"und".equals(language)) {
+            String display = Locale.forLanguageTag(language).getDisplayLanguage();
+            if (!display.isEmpty()) {
+                // Locale returns the tag unchanged when it cannot resolve it.
+                return display.equals(language)
+                        ? language.toUpperCase(Locale.ROOT)
+                        : display;
+            }
+        }
+        return "Audio " + (ordinal + 1);
+    }
+
+    private Object selectedAudioTrackId(JSArray tracks) {
+        for (int i = 0; i < tracks.length(); i++) {
+            JSObject track = (JSObject) tracks.opt(i);
+            if (track != null && track.optBoolean("selected", false)) {
+                return track.optInt("id", i);
+            }
+        }
+        return JSObject.NULL;
+    }
+
+    @PluginMethod
+    public void setAudioTrack(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            if (isCurrentSession(call) && player != null) {
+                applyAudioTrack(call.getInt("trackId", -1));
+            }
+            call.resolve();
+        });
+    }
+
+    /** Mirrors {@link #buildAudioTracks}' flattening; see its doc comment. */
+    private void applyAudioTrack(int wantedId) {
+        int id = 0;
+        for (Tracks.Group group : player.getCurrentTracks().getGroups()) {
+            if (group.getType() != C.TRACK_TYPE_AUDIO) {
+                continue;
+            }
+            for (int i = 0; i < group.length; i++) {
+                if (id == wantedId) {
+                    player.setTrackSelectionParameters(
+                            player.getTrackSelectionParameters()
+                                    .buildUpon()
+                                    .setOverrideForType(
+                                            new TrackSelectionOverride(
+                                                    group.getMediaTrackGroup(), i))
+                                    .build());
+                    return;
+                }
+                id++;
+            }
+        }
     }
 
     private String currentStatus() {
