@@ -28,6 +28,9 @@ import {
     handleFullscreenDirection,
     isActiveChannelRow,
     isInsidePlayer,
+    focusPlayerControls,
+    isTvFullscreen,
+    isTvFullscreenLocked,
 } from './player-keys';
 import { scrollToReveal } from './scroll-reach';
 import { findBestCandidate, type TvDirection } from './spatial-geometry';
@@ -389,7 +392,12 @@ function move(direction: TvDirection): boolean {
 function activate(): boolean {
     const active = currentElement();
     if (!active) {
-        return false;
+        // OK over fullscreen video raises the transport controls — the
+        // reference player's gesture. Nothing is focused there because
+        // entering the watch layout removes whatever was: the button that
+        // started playback. Focusing a control is what reveals the bar, and
+        // the blanked shell leaves nothing else to focus.
+        return isTvFullscreen() ? focusPlayerControls() : false;
     }
 
     // Granting real focus is what raises the keyboard; no coaxing needed.
@@ -400,7 +408,13 @@ function activate(): boolean {
     // The benchmark's two-step OK: the first press on a channel tunes it and
     // the list survives; the second — the row is now the active one — commits
     // to fullscreen. OK on the player itself commits the same way.
-    if (isActiveChannelRow(active) || isInsidePlayer(active)) {
+    // Not while fullscreen is locked: there the focused element IS a transport
+    // control, and enterFullscreen() reports success for an already-fullscreen
+    // player, which would swallow OK and leave Pause unpressable.
+    if (
+        !isTvFullscreenLocked() &&
+        (isActiveChannelRow(active) || isInsidePlayer(active))
+    ) {
         if (enterFullscreen()) {
             return true;
         }

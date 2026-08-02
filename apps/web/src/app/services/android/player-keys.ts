@@ -61,6 +61,27 @@ export function isTvFullscreen(): boolean {
     return document.documentElement.hasAttribute(TV_FULLSCREEN_ATTRIBUTE);
 }
 
+/**
+ * Put focus on a transport button, which is what makes the controls appear:
+ * the bar reveals itself on `focusin` and stays up while focus is inside.
+ *
+ * Deliberately a button and not "the first focusable thing in the player".
+ * The seek slider is an `<input type="range">`, and focusing an input raises
+ * the soft keyboard on the reference device — which is worse than doing
+ * nothing, because `MainActivity` then hands every D-pad key to the IME and
+ * the remote stops reaching the app at all.
+ */
+export function focusPlayerControls(): boolean {
+    const button = document.querySelector<HTMLElement>(
+        `${PLAYER_VIEW_SELECTOR} app-player-controls button:not([disabled])`
+    );
+    if (!button) {
+        return false;
+    }
+    button.focus();
+    return true;
+}
+
 /** Returns false when nothing is playing to enlarge. */
 export function enterFullscreen(): boolean {
     if (isTvFullscreen()) {
@@ -135,6 +156,16 @@ export function zapAdjacent(direction: TvDirection): boolean {
  */
 export function handleFullscreenDirection(direction: TvDirection): boolean {
     if (!isTvFullscreen()) {
+        return false;
+    }
+
+    // A locked fullscreen is on-demand playback: there is no channel list to
+    // zap through and no list layout to return to, so swallowing the keys here
+    // left the remote completely inert — every direction consumed, nothing
+    // moved. Hand them to the ordinary spatial search instead. The shell is
+    // blanked while fullscreen, so the only candidates left are the player's
+    // own controls, and focusing one is what makes the bar appear.
+    if (isTvFullscreenLocked()) {
         return false;
     }
 

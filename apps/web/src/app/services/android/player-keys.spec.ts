@@ -111,6 +111,36 @@ describe('player keys', () => {
         it('stays out of the way when not fullscreen', () => {
             expect(handleFullscreenDirection('up')).toBe(false);
         });
+
+        it('never zaps in a locked fullscreen, and yields the keys instead', () => {
+            // On-demand playback has no channel list to zap through. Claiming
+            // the keys anyway consumed every direction and moved nothing, so
+            // the remote was inert apart from BACK. Yielding lets the ordinary
+            // spatial search reach the transport controls.
+            document.body.innerHTML = `
+                <div class="channel-list-item active" id="r0"></div>
+                <div class="channel-list-item" id="r1"></div>
+                <app-web-player-view><app-android-native-player>
+                </app-android-native-player></app-web-player-view>
+            `;
+            let zapped = false;
+            byId('r1').addEventListener('click', () => {
+                zapped = true;
+            });
+            enterFullscreen();
+            document.documentElement.setAttribute(
+                TV_FULLSCREEN_LOCKED_ATTRIBUTE,
+                ''
+            );
+
+            for (const direction of ['up', 'down', 'left', 'right'] as const) {
+                expect(handleFullscreenDirection(direction)).toBe(false);
+            }
+            expect(zapped).toBe(false);
+            expect(
+                document.documentElement.hasAttribute(TV_FULLSCREEN_ATTRIBUTE)
+            ).toBe(true);
+        });
     });
 
     describe('recognising the two-step OK targets', () => {

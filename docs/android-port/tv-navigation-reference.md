@@ -290,6 +290,24 @@ The playback side of this contract now exists in the Android engine
 | UP/DOWN over fullscreen video — next/previous channel | done, by activating the adjacent `.channel-list-item` row; no-op when virtual scrolling has dropped the active row |
 | LEFT over fullscreen video — reveal the channel list | done (exits the layout fullscreen) |
 | BACK over fullscreen video — step back to the list | done; runs before the overlay/history branches, or BACK would leave the page |
+| OK over fullscreen video — raise the transport layer | partly: OK focuses the first transport button, which is what reveals the shared controls bar (it reveals on `focusin` and stays up while focus is inside). Directions then move between the buttons and OK activates one. Not the benchmark's three-band OSD — no now-playing card, no technical badges — but the transport itself is reachable |
+
+**On-demand playback is not live playback.** A locked fullscreen (movies and
+series, see `TV_FULLSCREEN_LOCKED_ATTRIBUTE`) has no channel list to zap
+through and no list layout to return to, so `handleFullscreenDirection` yields
+every direction to the ordinary spatial search instead of claiming it. Claiming
+them was worse than doing nothing: each press was consumed and nothing moved,
+leaving the remote inert apart from BACK. Two traps found on the device while
+fixing that:
+
+- **OK must focus a button, never "the first focusable thing".** The seek bar
+  is an `<input type="range">`, and focusing an input raises the soft keyboard
+  on the reference device — at which point `MainActivity` hands every D-pad key
+  to the IME and the remote stops reaching the app at all. The symptom looks
+  exactly like a dead remote.
+- **`enterFullscreen()` reports success when already fullscreen**, so the
+  existing `isInsidePlayer` branch swallowed OK and left Pause unpressable.
+  That branch is now skipped while the lock is set.
 
 ## Raw key map observed
 
