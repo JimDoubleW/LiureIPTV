@@ -1,5 +1,8 @@
 package com.liureiptv.tv;
 
+import android.content.ContentResolver;
+import android.content.Context;
+import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
@@ -14,6 +17,7 @@ import androidx.media3.common.Player;
 import androidx.media3.common.TrackSelectionOverride;
 import androidx.media3.common.Tracks;
 import androidx.media3.datasource.DataSource;
+import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
@@ -170,12 +174,20 @@ public class AndroidNativePlayerPlugin extends Plugin {
             }
 
             MediaItem.Builder itemBuilder = new MediaItem.Builder().setUri(url);
-            String mimeType = resolveMimeType(call.getString("mimeType"), url);
+            String mimeType = resolveMimeType(call.getString("mimeType"), url, getContext());
             if (mimeType != null) {
                 itemBuilder.setMimeType(mimeType);
             }
 
-            DataSource.Factory dataSourceFactory = httpFactory;
+            // Not the raw http factory: a downloaded file plays from a
+            // file:// (or occasionally content://) URI, which
+            // DefaultHttpDataSource cannot open at all. DefaultDataSource
+            // delegates by scheme — http(s) still goes through the same
+            // header-carrying httpFactory, local schemes go through
+            // FileDataSource/ContentDataSource — so this one factory serves
+            // both live streaming and downloaded playback.
+            DataSource.Factory dataSourceFactory =
+                    new DefaultDataSource.Factory(getContext(), httpFactory);
             MediaSource mediaSource =
                     new DefaultMediaSourceFactory(getContext())
                             .setDataSourceFactory(dataSourceFactory)
@@ -509,8 +521,16 @@ public class AndroidNativePlayerPlugin extends Plugin {
      * explicit MIME hint here, ExoPlayer's extension/content sniffing is
      * unreliable for exactly that shape, so extensionless defaults to TS
      * rather than being left to guess.
+     *
+     * A {@code content://} URI (downloaded-file playback, see
+     * AndroidDownloadsPlugin) breaks that same extensionless heuristic in the
+     * other direction: its last path segment is normally a bare numeric row
+     * id, which would default to MPEG-TS for what is actually an MP4/MKV
+     * file. The ContentResolver already knows the real type — it is asked
+     * first, before any extension guessing, and only for this scheme; http(s)
+     * URLs never reach it.
      */
-    private static String resolveMimeType(String hint, String url) {
+    private static String resolveMimeType(String hint, String url, Context context) {
         String normalizedHint = hint != null ? hint.toLowerCase(Locale.US) : null;
         if (normalizedHint != null) {
             if (normalizedHint.contains("mpegurl") || normalizedHint.contains("m3u8")) {
@@ -518,6 +538,15 @@ public class AndroidNativePlayerPlugin extends Plugin {
             }
             if (normalizedHint.contains("mp2t") || normalizedHint.contains("mpeg-ts")) {
                 return MimeTypes.VIDEO_MP2T;
+            }
+        }
+
+        Uri uri = Uri.parse(url);
+        if ("content".equals(uri.getScheme())) {
+            ContentResolver resolver = context.getContentResolver();
+            String contentType = resolver.getType(uri);
+            if (!TextUtils.isEmpty(contentType)) {
+                return contentType;
             }
         }
 

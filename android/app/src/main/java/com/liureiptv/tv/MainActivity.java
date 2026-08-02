@@ -19,6 +19,7 @@ public class MainActivity extends BridgeActivity {
         // app, not just one that arrives while it is already running.
         registerPlugin(BackupImportPlugin.class);
         registerPlugin(AndroidNativePlayerPlugin.class);
+        registerPlugin(AndroidDownloadsPlugin.class);
         super.onCreate(savedInstanceState);
     }
 
