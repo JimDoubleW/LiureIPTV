@@ -301,6 +301,15 @@ public class AndroidNativePlayerPlugin extends Plugin {
 
         if (player != null) {
             player.removeListener(playerListener);
+            // Releasing a large local content:// source can take noticeable
+            // time on Android TV. Silence and stop the renderers first so a
+            // route change never leaves movie audio playing behind the
+            // catalogue while release() finishes its cleanup.
+            player.setPlayWhenReady(false);
+            player.setVolume(0f);
+            player.pause();
+            player.stop();
+            player.clearVideoSurface();
             player.release();
             player = null;
         }

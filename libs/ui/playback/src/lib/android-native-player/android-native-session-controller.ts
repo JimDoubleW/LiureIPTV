@@ -225,7 +225,16 @@ export class AndroidNativeSessionController {
             this.snapshot.set(null);
 
             if (id) {
-                void this.plugin.dispose({ id });
+                // `ExoPlayer.release()` can block for several seconds while a
+                // large content:// source is being torn down. Pause in its
+                // own bridge call first so audio stops before that expensive
+                // release begins; otherwise the WebView has already returned
+                // to the catalogue while the movie remains audible.
+                void this.plugin
+                    .pause({ id })
+                    .catch(() => undefined)
+                    .then(() => this.plugin.dispose({ id }))
+                    .catch(() => undefined);
             }
         };
     }

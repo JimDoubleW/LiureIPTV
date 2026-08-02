@@ -135,7 +135,15 @@ describe('AndroidNativeSessionController', () => {
 
         expect(controller.snapshot()).toBeNull();
         expect(controller.sessionId()).toBeNull();
+        await waitFor(
+            () => plugin.dispose.mock.calls.length > 0,
+            'session disposal to finish'
+        );
+        expect(plugin.pause).toHaveBeenCalledWith({ id: 'session-1' });
         expect(plugin.dispose).toHaveBeenCalledWith({ id: 'session-1' });
+        expect(plugin.pause.mock.invocationCallOrder[0]).toBeLessThan(
+            plugin.dispose.mock.invocationCallOrder[0]
+        );
     });
 
     it('sets an error snapshot when the plugin cannot create a session', async () => {
