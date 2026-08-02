@@ -29,7 +29,8 @@
             /* Inline splash — paints immediately while the JS bundle and the
                styles.css (~300KB) are still downloading and Angular is
                bootstrapping. Removed from the DOM by main.ts after
-               bootstrapApplication() resolves. No assets, zero extra HTTP. */
+               bootstrapApplication() resolves. Its branded image is packaged
+               locally with the app, so Android never needs the network here. */
             #initial-splash {
                 position: fixed;
                 inset: 0;
@@ -37,19 +38,18 @@
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                gap: 18px;
-                background: #1f1f23;
+                gap: 24px;
+                background: #000;
                 color: #f5f5f7;
                 font-family:
                     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
                     'Helvetica Neue', Arial, sans-serif;
                 z-index: 99999;
             }
-            #initial-splash .splash-mark {
-                font-size: 18px;
-                font-weight: 600;
-                letter-spacing: 0.04em;
-                opacity: 0.85;
+            #initial-splash .splash-logo {
+                display: block;
+                width: min(64vmin, 512px);
+                height: auto;
             }
             #initial-splash .splash-spinner {
                 width: 28px;
@@ -74,7 +74,11 @@
     </head>
     <body class="mat-app-background">
         <div id="initial-splash" role="status" aria-label="Loading LiureIPTV">
-            <span class="splash-mark">LiureIPTV</span>
+            <img
+                class="splash-logo"
+                src="assets/icons/liureiptv-splash.png"
+                alt=""
+            />
             <span class="splash-spinner" aria-hidden="true"></span>
         </div>
         <app-root></app-root>

@@ -8,10 +8,16 @@ import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
 
+import androidx.core.splashscreen.SplashScreen;
+
 public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Apply Theme.SplashScreen's Android 12+ icon/background contract
+        // before BridgeActivity creates the window and WebView.
+        SplashScreen.installSplashScreen(this);
+
         // Must run before super.onCreate(), which is what builds the Bridge
         // and needs the plugin class in hand to register it. BridgeActivity's
         // onCreate() also replays the launch intent through onNewIntent(),

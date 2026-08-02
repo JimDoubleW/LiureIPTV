@@ -1093,4 +1093,6 @@ source movie or series detail. Play Local on an Xtream movie detail uses the
 native Android player; teardown pauses and stops ExoPlayer before its
 potentially slow release so no audio survives the return to the catalogue.
 Pause resumes from zero; generic list and episode-local playback remain later
-phases.
+phases. Android launch resources and the immediate WebView bootstrap screen
+share the branded LiureIPTV splash artwork; native variants remain named
+`drawable*/splash.png` because the launch theme resolves `@drawable/splash`.

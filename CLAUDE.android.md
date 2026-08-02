@@ -878,7 +878,7 @@ app-wide, so leaking it shows the black Android window everywhere.
    the `inspect` link under the package entry, or
    `http://localhost:9222/json/list`.
 
-## Partial in-app rebrand: splash and welcome screen only
+## Partial in-app rebrand: launcher, splash, and welcome screen
 
 The native Android identity (`applicationId com.liureiptv.tv`, launcher label,
 task-switcher title — `android/app/src/main/res/values/strings.xml`) was
@@ -896,8 +896,25 @@ files.
 
 Changed:
 
+- `android/app/src/main/res/mipmap-*/ic_launcher*.png`: the Android-only
+  launcher artwork uses the LiureIPTV Puy de Dôme icon for the standard,
+  round, and adaptive-foreground resources at every existing density. Keep
+  each resource's current dimensions (48–192 px for standard/round and
+  108–432 px for adaptive foreground); do not replace the shared Web/PWA
+  icons under `apps/web/src/assets/icons/` as part of an Android-only rebrand.
 - `apps/web/src/index.html`: `<title>`, the splash's `aria-label`, and the
-  `.splash-mark` text.
+  branded `assets/icons/liureiptv-splash.png` image. The black background and
+  bounded `vmin` sizing keep the WebView bootstrap screen visually continuous
+  with the native Android launch screen instead of flashing back to the old
+  text-and-spinner branding.
+- `android/app/src/main/res/drawable*/splash.png`: the same LiureIPTV artwork
+  is centered without distortion on black canvases at every existing
+  landscape/portrait density. Keep the resource basename `splash.png`:
+  `AppTheme.NoActionBarLaunch` references `@drawable/splash`, and Android TV
+  normally resolves the landscape density variant. Android 12+ additionally
+  requires `windowSplashScreenAnimatedIcon`; its square source is
+  `drawable/liureiptv_splash_icon.png`, and `MainActivity` must call
+  `SplashScreen.installSplashScreen(this)` before `super.onCreate()`.
 - `HOME.PLAYLISTS.WELCOME_TITLE` in `en.json`/`fr.json` — the big headline on
   the empty-dashboard "add your first playlist" screen
   (`empty-state.component.html`'s `'welcome-dashboard'` case), the first
