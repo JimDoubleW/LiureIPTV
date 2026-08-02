@@ -82,6 +82,49 @@ export function focusPlayerControls(): boolean {
     return true;
 }
 
+/**
+ * How long the controls stay up with the remote idle. Longer than the shared
+ * bar's own 2.5s hover delay: a pointer leaves the bar on its way elsewhere,
+ * whereas a viewer reading a seek position from three metres away has not
+ * finished looking at it yet.
+ */
+const CONTROLS_IDLE_MS = 5000;
+let controlsIdleTimer: number | null = null;
+
+function focusedControl(): HTMLElement | null {
+    const active = document.activeElement;
+    return active instanceof HTMLElement &&
+        active.closest(`${PLAYER_VIEW_SELECTOR} app-player-controls`)
+        ? active
+        : null;
+}
+
+/**
+ * Let the controls fade again after the remote goes quiet.
+ *
+ * The shared bar hides itself on a timer, but pins itself open while focus is
+ * inside — sensible for a pointer, which moves on by itself. A remote's focus
+ * never moves on: there is nowhere else to put it while the shell is blanked,
+ * so the bar sat over the film forever. Dropping focus is what releases the
+ * pin; the bar's own `focusout` handler then schedules the hide it always
+ * would have. Re-armed on every key, so it measures idleness, not age.
+ */
+export function armPlayerControlsIdleHide(): void {
+    if (controlsIdleTimer !== null) {
+        window.clearTimeout(controlsIdleTimer);
+        controlsIdleTimer = null;
+    }
+    if (!focusedControl()) {
+        return;
+    }
+
+    controlsIdleTimer = window.setTimeout(() => {
+        controlsIdleTimer = null;
+        // Re-checked: the session may have ended, or focus moved, since.
+        focusedControl()?.blur();
+    }, CONTROLS_IDLE_MS);
+}
+
 /** Returns false when nothing is playing to enlarge. */
 export function enterFullscreen(): boolean {
     if (isTvFullscreen()) {

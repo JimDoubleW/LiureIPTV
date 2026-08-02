@@ -31,6 +31,7 @@ import {
     focusPlayerControls,
     isTvFullscreen,
     isTvFullscreenLocked,
+    armPlayerControlsIdleHide,
 } from './player-keys';
 import { scrollToReveal } from './scroll-reach';
 import { findBestCandidate, type TvDirection } from './spatial-geometry';
@@ -553,6 +554,17 @@ function dispatchFromNative(key: string): void {
         return;
     }
 
+    // Every press below can leave focus sitting on a transport control, which
+    // pins the bar open. Re-arming here rather than at each call site means
+    // the timer measures how long the remote has been quiet.
+    try {
+        handleNavigationKey(mapped);
+    } finally {
+        armPlayerControlsIdleHide();
+    }
+}
+
+function handleNavigationKey(mapped: TvDirection | 'ok'): void {
     // A native/Material control (an open mat-select, a slider, a plain
     // <select>) must keep driving its own arrow/Enter handling — see
     // isNativeControlOpen's doc comment for the mat-select case this was

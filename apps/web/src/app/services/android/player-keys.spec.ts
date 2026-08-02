@@ -1,4 +1,5 @@
 import {
+    armPlayerControlsIdleHide,
     enterFullscreen,
     exitFullscreen,
     handleFullscreenDirection,
@@ -87,6 +88,33 @@ describe('player keys', () => {
                 TV_FULLSCREEN_LOCKED_ATTRIBUTE
             );
             expect(exitFullscreen()).toBe(true);
+        });
+
+        it('drops focus off the controls once the remote goes quiet', () => {
+            // The shared bar pins itself open while focus is inside — right
+            // for a pointer, which moves on by itself. A remote's focus has
+            // nowhere else to go while the shell is blanked, so the bar sat
+            // over the film forever. Dropping focus is what releases the pin.
+            jest.useFakeTimers();
+            document.body.innerHTML =
+                '<app-web-player-view><app-player-controls>' +
+                '<button id="pause">Pause</button>' +
+                '</app-player-controls></app-web-player-view>';
+            byId('pause').focus();
+            expect(document.activeElement).toBe(byId('pause'));
+
+            armPlayerControlsIdleHide();
+            jest.advanceTimersByTime(4_000);
+            expect(document.activeElement).toBe(byId('pause'));
+
+            // Re-armed on every press, so it measures idleness, not age.
+            armPlayerControlsIdleHide();
+            jest.advanceTimersByTime(4_000);
+            expect(document.activeElement).toBe(byId('pause'));
+
+            jest.advanceTimersByTime(2_000);
+            expect(document.activeElement).not.toBe(byId('pause'));
+            jest.useRealTimers();
         });
 
         it('reports nothing to exit when not fullscreen', () => {

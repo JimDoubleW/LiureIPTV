@@ -308,6 +308,13 @@ fixing that:
 - **`enterFullscreen()` reports success when already fullscreen**, so the
   existing `isInsidePlayer` branch swallowed OK and left Pause unpressable.
   That branch is now skipped while the lock is set.
+- **The bar never went away again.** It hides on a timer but pins itself open
+  while focus is inside — right for a pointer, which moves on by itself, but a
+  remote's focus has nowhere else to go while the shell is blanked, so the
+  controls sat over the film for good. `armPlayerControlsIdleHide` drops focus
+  after 5s of remote silence, which releases the pin and lets the bar's own
+  `focusout` handler schedule the hide it always would have. Re-armed on every
+  press, so it measures idleness rather than age.
 
 ## Raw key map observed
 
