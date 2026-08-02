@@ -48,8 +48,13 @@ export class DownloadsService implements OnDestroy {
     /** Whether the first download list request has completed */
     readonly hasLoadedDownloads = this._hasLoadedDownloads.asReadonly();
 
-    /** Whether the download feature is available (Electron only) */
+    /** Whether the current runtime exposes the complete downloads bridge */
     readonly isAvailable = computed(() => this.runtime.supportsDownloads);
+
+    /** Direct file launch/reveal is desktop-only until Android local playback ships. */
+    readonly supportsFileActions = computed(
+        () => this.isAvailable() && !this.runtime.isAndroid
+    );
 
     /** Whether there are any downloads */
     readonly hasDownloads = computed(() => this.downloads().length > 0);

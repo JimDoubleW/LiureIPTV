@@ -164,6 +164,7 @@
                     @for (item of filteredDownloads(); track item.id) {
                         <div
                             class="downloads__item"
+                            data-tv-action-card
                             [class]="getStatusColor(item.status)"
                             [class.downloads__item--clickable]="
                                 isItemNavigable(item)
@@ -271,7 +272,10 @@
                                     ></mat-progress-bar>
                                 }
 
-                                <div class="downloads__item-actions">
+                                <div
+                                    class="downloads__item-actions"
+                                    data-tv-action-row
+                                >
                                     <button
                                         mat-icon-button
                                         (click)="
@@ -378,31 +382,39 @@
                                             </button>
                                         }
                                         @case ('completed') {
-                                            <button
-                                                mat-icon-button
-                                                color="primary"
-                                                (click)="
-                                                    $event.stopPropagation();
-                                                    play(item)
-                                                "
-                                                [matTooltip]="
-                                                    'DOWNLOADS.PLAY' | translate
-                                                "
-                                            >
-                                                <mat-icon>play_arrow</mat-icon>
-                                            </button>
-                                            <button
-                                                mat-icon-button
-                                                (click)="
-                                                    $event.stopPropagation();
-                                                    reveal(item)
-                                                "
-                                                [matTooltip]="
-                                                    'DOWNLOADS.REVEAL' | translate
-                                                "
-                                            >
-                                                <mat-icon>folder_open</mat-icon>
-                                            </button>
+                                            @if (supportsFileActions()) {
+                                                <button
+                                                    mat-icon-button
+                                                    color="primary"
+                                                    (click)="
+                                                        $event.stopPropagation();
+                                                        play(item)
+                                                    "
+                                                    [matTooltip]="
+                                                        'DOWNLOADS.PLAY'
+                                                            | translate
+                                                    "
+                                                >
+                                                    <mat-icon
+                                                        >play_arrow</mat-icon
+                                                    >
+                                                </button>
+                                                <button
+                                                    mat-icon-button
+                                                    (click)="
+                                                        $event.stopPropagation();
+                                                        reveal(item)
+                                                    "
+                                                    [matTooltip]="
+                                                        'DOWNLOADS.REVEAL'
+                                                            | translate
+                                                    "
+                                                >
+                                                    <mat-icon
+                                                        >folder_open</mat-icon
+                                                    >
+                                                </button>
+                                            }
                                             <button
                                                 mat-icon-button
                                                 color="warn"

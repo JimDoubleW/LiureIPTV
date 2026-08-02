@@ -139,6 +139,30 @@ describe('WorkspaceShellHeaderComponent', () => {
         expect(button).toBeNull();
     });
 
+    it('shows the downloads shortcut whenever the runtime supports downloads', () => {
+        fixture.componentRef.setInput('supportsDownloads', true);
+        fixture.detectChanges();
+
+        const button: HTMLButtonElement | null =
+            fixture.nativeElement.querySelector(
+                'button[aria-label="WORKSPACE.SHELL.OPEN_DOWNLOADS"]'
+            );
+
+        expect(button).not.toBeNull();
+    });
+
+    it('hides the downloads shortcut when the runtime lacks the capability', () => {
+        fixture.componentRef.setInput('supportsDownloads', false);
+        fixture.detectChanges();
+
+        const button: HTMLButtonElement | null =
+            fixture.nativeElement.querySelector(
+                'button[aria-label="WORKSPACE.SHELL.OPEN_DOWNLOADS"]'
+            );
+
+        expect(button).toBeNull();
+    });
+
     it('emits contextual header shortcut requests when configured', () => {
         const requested = jest.fn();
         component.headerShortcutRequested.subscribe(requested);

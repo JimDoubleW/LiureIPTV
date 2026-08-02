@@ -73,6 +73,7 @@ export class DownloadsComponent {
     readonly downloads = this.downloadsService.downloads;
     readonly downloadFolder = this.downloadsService.downloadFolder;
     readonly isAvailable = this.downloadsService.isAvailable;
+    readonly supportsFileActions = this.downloadsService.supportsFileActions;
     readonly isLoadingDownloads = this.downloadsService.isLoadingDownloads;
     readonly hasLoadedDownloads = this.downloadsService.hasLoadedDownloads;
     readonly activeCount = this.downloadsService.activeCount;

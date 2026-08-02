@@ -1261,6 +1261,46 @@ Two traps found the hard way:
   under the old origin become unreachable. Run `adb shell pm clear <appId>` when
   switching, and treat any future scheme change as a data migration.
 
+## Downloads
+
+Android exposes the existing shared downloads UI through a partial
+`window.electron.downloads*` bridge installed before Angular bootstrap
+(`apps/web/src/app/services/android/downloads/android-downloads-bridge.ts`).
+The bridge keeps the renderer contract unchanged while delegating transfers to
+the OS `DownloadManager` through `AndroidDownloadsPlugin` and metadata to a
+separate WebView SQLite database (`liureiptv-downloads`).
+
+Downloads use the app-private external-files `downloads/` directory: no storage
+permission is required, transfers survive app restarts and connectivity loss,
+and uninstalling the app removes the files. Request `User-Agent`, `Referer` and
+`Origin` headers are persisted so retry can recreate portal requests. The
+bridge polls all active native ids in one call and only emits a renderer update
+when persisted state actually changes.
+
+Android `DownloadManager` has no manual pause API. Pause therefore removes the
+native request and resume starts the file again from zero; the UI must not imply
+byte-range continuation. File-manager reveal and direct downloaded-file play
+remain deliberately unsupported by the bridge for now: users can navigate back
+to the source library item, while a later phase can route the local URI through
+the native player surface. The shared Downloads page hides its desktop-only
+Play and Reveal buttons on Android until that route exists.
+
+Verified end to end on the reference Mi Box S 3rd (Android 14/API 34): the
+native plugin registered at startup, the shared Downloads screen reported the
+feature available, and a neutral 129-byte LAN payload transitioned from
+`downloading` to `completed` with a local URI before Remove deleted both its
+metadata and native file. The test left zero synthetic download rows behind.
+The workspace-header shortcut is capability-gated (`supportsDownloads`), not
+Electron-gated, so Android users can always open the Downloads screen even
+after the active-transfer indicator disappears.
+
+Download rows are explicit `data-tv-action-card`s with a
+`data-tv-action-row`. Their Copy/Delete (and active-transfer) controls sit
+inside the focused card's rectangle, so generic edge-based spatial scoring
+cannot enter them. `moveWithinActionCard()` owns local LEFT/RIGHT traversal:
+RIGHT enters and walks the controls, while LEFT from the first returns to the
+card. UP/DOWN remain ordinary geometric movement between download rows.
+
 ## Out Of Scope
 
 Not ported, and not worth reading when working on Android: Embedded MPV (native

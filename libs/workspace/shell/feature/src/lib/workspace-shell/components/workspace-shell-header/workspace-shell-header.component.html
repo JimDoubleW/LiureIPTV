@@ -113,7 +113,7 @@
         }
     </div>
 
-    @if (isElectron()) {
+    @if (supportsDownloads()) {
         <div class="header-actions header-actions--trailing">
             <span class="download-btn-wrap">
                 @if (hasActiveDownloads()) {

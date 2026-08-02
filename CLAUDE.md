@@ -1084,3 +1084,6 @@ No formal migration system yet. Schema changes are applied via raw SQL in the `c
 This fork carries an Android TV port on the `androidtv/main` branch. Its branch
 model, conflict-surface rules, target hardware and open decisions live in
 [`CLAUDE.android.md`](./CLAUDE.android.md) — read it before touching port code.
+Android downloads reuse the shared downloads UI through a partial bridge backed
+by the OS `DownloadManager` and WebView SQLite; pause resumes from zero, and
+direct local-file playback remains a later phase.

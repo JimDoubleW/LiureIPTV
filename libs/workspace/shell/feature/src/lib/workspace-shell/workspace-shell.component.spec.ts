@@ -55,7 +55,7 @@ class MockWorkspaceShellHeaderComponent {
     readonly headerShortcut = input<unknown>(null);
     readonly canRefreshPlaylist = input(false);
     readonly isRefreshingPlaylist = input(false);
-    readonly isElectron = input(false);
+    readonly supportsDownloads = input(false);
     readonly hasNoPlaylists = input(false);
     readonly isDownloadsView = input(false);
     readonly hasActiveDownloads = input(false);

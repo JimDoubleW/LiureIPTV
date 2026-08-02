@@ -219,6 +219,61 @@ function applyFocus(element: HTMLElement): void {
 }
 
 /**
+ * A wide action card contains controls inside its own rectangle. Pure spatial
+ * scoring correctly rejects those controls as being "behind" the card's right
+ * edge, which made Download Copy/Delete buttons unreachable from the focused
+ * row. Explicit action-card semantics provide the expected local traversal:
+ * RIGHT enters the action row, LEFT/RIGHT walks it, and LEFT from its first
+ * action returns to the card.
+ */
+function moveWithinActionCard(
+    origin: HTMLElement,
+    direction: TvDirection
+): boolean {
+    const card = origin.closest<HTMLElement>('[data-tv-action-card]');
+    const actionRow = card?.querySelector<HTMLElement>('[data-tv-action-row]');
+    if (!card || !actionRow) {
+        return false;
+    }
+
+    const actions = Array.from(
+        actionRow.querySelectorAll<HTMLButtonElement>('button:not([disabled])')
+    );
+    if (actions.length === 0) {
+        return false;
+    }
+
+    if (origin === card && direction === 'right') {
+        applyFocus(actions[0]);
+        return true;
+    }
+
+    const actionIndex = actions.indexOf(origin as HTMLButtonElement);
+    if (actionIndex < 0) {
+        return false;
+    }
+
+    if (direction === 'right' && actionIndex < actions.length - 1) {
+        applyFocus(actions[actionIndex + 1]);
+        return true;
+    }
+    if (direction === 'left' && actionIndex > 0) {
+        applyFocus(actions[actionIndex - 1]);
+        return true;
+    }
+    if (
+        direction === 'left' &&
+        actionIndex === 0 &&
+        card.hasAttribute('tabindex')
+    ) {
+        applyFocus(card);
+        return true;
+    }
+
+    return false;
+}
+
+/**
  * Categories follow focus — no OK needed. Debounced so that traversing the
  * column on the way somewhere else does not load every category it passes,
  * and skipped when the row is already the active category, because re-clicking
@@ -308,6 +363,10 @@ function move(direction: TvDirection): boolean {
     const origin = currentElement();
     if (!origin) {
         return focusFirstCandidate();
+    }
+
+    if (moveWithinActionCard(origin, direction)) {
+        return true;
     }
 
     // Left out of the content restores the folded column first, one panel at a

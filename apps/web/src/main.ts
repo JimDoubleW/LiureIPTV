@@ -2,6 +2,7 @@ import { bootstrapApplication } from '@angular/platform-browser';
 import { registerAppDateLocales } from './app/app-date-locales';
 import { AppComponent } from './app/app.component';
 import { appConfig } from './app/app.config';
+import { installAndroidDownloadsBridge } from './app/services/android/downloads/android-downloads-bridge';
 import { installAndroidEpgBridge } from './app/services/android/android-epg-bridge';
 import { armTvNavigation } from './app/services/android/tv-navigation';
 
@@ -11,6 +12,7 @@ registerAppDateLocales();
 // must install before bootstrap so DataFactory() and the capability probes see
 // a consistent world from the first injection.
 installAndroidEpgBridge();
+installAndroidDownloadsBridge();
 armTvNavigation();
 
 bootstrapApplication(AppComponent, appConfig)
