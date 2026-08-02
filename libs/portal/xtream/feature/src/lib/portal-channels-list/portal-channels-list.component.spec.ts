@@ -419,4 +419,46 @@ describe('PortalChannelsListComponent', () => {
         );
         expect(fixture.componentInstance.favorites.get('live:253')).toBe(true);
     });
+
+    it('moves each row on to the programme now airing as time passes', () => {
+        // pickPreviewProgram answers "what is on air now", and it used to run
+        // only when EPG data arrived — so a row kept showing whatever aired at
+        // fetch time. A 15-minute programme was wrong within the quarter hour;
+        // only long ones made it look right.
+        //
+        // The tick's callback is captured rather than driven by fake timers:
+        // advancing time re-renders the component, which trips the stubbed
+        // TranslateService for reasons unrelated to this behaviour.
+        const setInterval = jest.spyOn(window, 'setInterval');
+        const component = fixture.componentInstance;
+        component.ngOnInit();
+
+        const tick = setInterval.mock.calls.at(-1);
+        expect(tick?.[1]).toBe(30_000);
+
+        const base = Date.UTC(2026, 7, 2, 17, 0, 0) / 1000;
+        epgQueueService.getCached.mockReturnValue([
+            {
+                title: 'Programme A',
+                start_timestamp: base,
+                stop_timestamp: base + 900,
+            },
+            {
+                title: 'Programme B',
+                start_timestamp: base + 900,
+                stop_timestamp: base + 3600,
+            },
+        ]);
+        component.epgPrograms.set(7, {
+            title: 'Programme A',
+            start: base * 1000,
+            stop: (base + 900) * 1000,
+        } as never);
+
+        jest.spyOn(Date, 'now').mockReturnValue((base + 1200) * 1000);
+        (tick?.[0] as () => void)();
+
+        expect(component.epgPrograms.get(7)?.title).toBe('Programme B');
+        setInterval.mockRestore();
+    });
 });

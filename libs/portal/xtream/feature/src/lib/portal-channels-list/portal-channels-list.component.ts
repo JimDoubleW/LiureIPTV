@@ -137,6 +137,14 @@ export class PortalChannelsListComponent implements AfterViewInit, OnDestroy {
     epgPrograms = new Map<number, EpgProgram>();
     currentProgramsProgress = new Map<number, number>();
 
+    /**
+     * How often each row re-picks the programme on air. Matches the M3U
+     * channel list's own tick; a minute would leave a short programme visibly
+     * stale, and a second would re-render a virtual list for nothing.
+     */
+    private static readonly PROGRAM_TICK_MS = 30_000;
+    private programTickId: number | null = null;
+
     /** Last viewport slice, reused to refresh previews after a mapping change. */
     private lastVisibleChannels: XtreamChannelListItem[] = [];
 
@@ -193,6 +201,11 @@ export class PortalChannelsListComponent implements AfterViewInit, OnDestroy {
     }
 
     ngOnInit(): void {
+        this.programTickId = window.setInterval(
+            () => this.refreshCurrentPrograms(),
+            PortalChannelsListComponent.PROGRAM_TICK_MS
+        );
+
         const { categoryId } = this.route.snapshot.params;
         if (categoryId && !this.channelsOverride())
             this.xtreamStore.setSelectedCategory(Number(categoryId));
@@ -389,6 +402,60 @@ export class PortalChannelsListComponent implements AfterViewInit, OnDestroy {
 
     ngOnDestroy(): void {
         this.subscriptions.unsubscribe();
+        if (this.programTickId !== null) {
+            window.clearInterval(this.programTickId);
+            this.programTickId = null;
+        }
+    }
+
+    /**
+     * Re-pick each row's current programme and recompute its progress.
+     *
+     * `pickPreviewProgram` answers "what is on air *now*", and it ran only
+     * when EPG data arrived — so a row kept showing whatever was airing at
+     * fetch time. On a 15-minute programme that is wrong within the quarter
+     * hour; only long programmes made it look right. The bar froze for the
+     * same reason.
+     *
+     * One interval for the whole list rather than one per row: the M3U list
+     * settled on the same shape, and a 90k-channel list cannot afford a timer
+     * each. The EPG items are re-read from the queue's cache, so this costs no
+     * network.
+     */
+    private refreshCurrentPrograms(): void {
+        let changed = false;
+
+        for (const streamId of [...this.epgPrograms.keys()]) {
+            const cached = this.epgQueueService.getCached(streamId);
+            if (!cached) {
+                continue;
+            }
+
+            const program = this.pickPreviewProgram(cached);
+            if (!program) {
+                continue;
+            }
+
+            const previousStart = this.epgPrograms.get(streamId)?.start;
+            const previousProgress = this.currentProgramsProgress.get(streamId);
+
+            this.epgPrograms.set(streamId, this.toSharedEpgProgram(program));
+            this.updateProgramProgress(streamId, program);
+
+            if (
+                previousStart !== this.epgPrograms.get(streamId)?.start ||
+                previousProgress !== this.currentProgramsProgress.get(streamId)
+            ) {
+                changed = true;
+            }
+        }
+
+        // Change detection is manual here (OnPush + a mutated Map), so it has
+        // to be asked for — but only when something actually moved, or every
+        // tick would re-render a virtual list of tens of thousands of rows.
+        if (changed) {
+            this.cdr.detectChanges();
+        }
     }
 
     private applyProgram(streamId: number, program: EpgItem): void {
