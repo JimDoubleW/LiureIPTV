@@ -82,6 +82,13 @@ export function focusPlayerControls(): boolean {
     return true;
 }
 
+/** True when focus already sits on a transport control. */
+export function isInsidePlayerControls(element: Element | null): boolean {
+    return (
+        element?.closest(`${PLAYER_VIEW_SELECTOR} app-player-controls`) != null
+    );
+}
+
 /**
  * How long the controls stay up with the remote idle. Longer than the shared
  * bar's own 2.5s hover delay: a pointer leaves the bar on its way elsewhere,
@@ -202,13 +209,20 @@ export function handleFullscreenDirection(direction: TvDirection): boolean {
         return false;
     }
 
+    // Two cases hand the keys to the ordinary spatial search instead.
+    //
     // A locked fullscreen is on-demand playback: there is no channel list to
-    // zap through and no list layout to return to, so swallowing the keys here
-    // left the remote completely inert — every direction consumed, nothing
-    // moved. Hand them to the ordinary spatial search instead. The shell is
-    // blanked while fullscreen, so the only candidates left are the player's
-    // own controls, and focusing one is what makes the bar appear.
-    if (isTvFullscreenLocked()) {
+    // zap through and no list layout to return to, so claiming the keys left
+    // the remote completely inert — every direction consumed, nothing moved.
+    //
+    // And whenever focus is already on a transport control, the directions
+    // belong to that row: zapping out from under a half-used control panel
+    // would be the wrong gesture in live too. Focus returns to nothing after
+    // the idle timeout, which is what gives the zap its keys back.
+    if (
+        isTvFullscreenLocked() ||
+        isInsidePlayerControls(document.activeElement)
+    ) {
         return false;
     }
 

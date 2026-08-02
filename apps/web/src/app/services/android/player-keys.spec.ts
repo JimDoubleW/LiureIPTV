@@ -140,6 +140,34 @@ describe('player keys', () => {
             expect(handleFullscreenDirection('up')).toBe(false);
         });
 
+        it('stops zapping in live once focus is on a transport control', () => {
+            // Zapping out from under a half-used control panel is the wrong
+            // gesture: while the bar has focus the directions belong to it.
+            // The idle timeout drops focus again, which gives zap its keys
+            // back — so this never strands the channel keys.
+            document.body.innerHTML = `
+                <div class="channel-list-item active" id="r0"></div>
+                <div class="channel-list-item" id="r1"></div>
+                <app-web-player-view><video></video>
+                <app-player-controls><button id="pause">Pause</button>
+                </app-player-controls></app-web-player-view>
+            `;
+            let zapped = false;
+            byId('r1').addEventListener('click', () => {
+                zapped = true;
+            });
+            enterFullscreen();
+
+            // Nothing focused: live still zaps, the benchmark contract.
+            expect(handleFullscreenDirection('up')).toBe(true);
+            expect(zapped).toBe(true);
+
+            zapped = false;
+            byId('pause').focus();
+            expect(handleFullscreenDirection('up')).toBe(false);
+            expect(zapped).toBe(false);
+        });
+
         it('never zaps in a locked fullscreen, and yields the keys instead', () => {
             // On-demand playback has no channel list to zap through. Claiming
             // the keys anyway consumed every direction and moved nothing, so

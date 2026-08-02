@@ -290,7 +290,7 @@ The playback side of this contract now exists in the Android engine
 | UP/DOWN over fullscreen video — next/previous channel | done, by activating the adjacent `.channel-list-item` row; no-op when virtual scrolling has dropped the active row |
 | LEFT over fullscreen video — reveal the channel list | done (exits the layout fullscreen) |
 | BACK over fullscreen video — step back to the list | done; runs before the overlay/history branches, or BACK would leave the page |
-| OK over fullscreen video — raise the transport layer | partly: OK focuses the first transport button, which is what reveals the shared controls bar (it reveals on `focusin` and stays up while focus is inside). Directions then move between the buttons and OK activates one. Not the benchmark's three-band OSD — no now-playing card, no technical badges — but the transport itself is reachable |
+| OK over fullscreen video — raise the transport layer | partly: OK focuses the first transport button, which is what reveals the shared controls bar (it reveals on `focusin` and stays up while focus is inside). Directions then move between the buttons and OK activates one. Not the benchmark's three-band OSD — no now-playing card, no technical badges — but the transport itself is reachable. **Live and on-demand behave the same here.** While the bar has focus the directions belong to it, so live stops zapping until the idle timeout drops focus and gives the channel keys back |
 
 **On-demand playback is not live playback.** A locked fullscreen (movies and
 series, see `TV_FULLSCREEN_LOCKED_ATTRIBUTE`) has no channel list to zap
@@ -306,8 +306,11 @@ fixing that:
   to the IME and the remote stops reaching the app at all. The symptom looks
   exactly like a dead remote.
 - **`enterFullscreen()` reports success when already fullscreen**, so the
-  existing `isInsidePlayer` branch swallowed OK and left Pause unpressable.
-  That branch is now skipped while the lock is set.
+  existing `isInsidePlayer` branch swallowed OK and left Pause unpressable —
+  every transport control sits inside the player view. That branch now runs
+  only *before* fullscreen. Scoping it to the on-demand lock instead was not
+  enough and regressed live: the same swallow, on the same branch, for the
+  same reason.
 - **The bar never went away again.** It hides on a timer but pins itself open
   while focus is inside — right for a pointer, which moves on by itself, but a
   remote's focus has nowhere else to go while the shell is blanked, so the

@@ -30,7 +30,7 @@ import {
     isInsidePlayer,
     focusPlayerControls,
     isTvFullscreen,
-    isTvFullscreenLocked,
+    isInsidePlayerControls,
     armPlayerControlsIdleHide,
 } from './player-keys';
 import { scrollToReveal } from './scroll-reach';
@@ -392,13 +392,23 @@ function move(direction: TvDirection): boolean {
  */
 function activate(): boolean {
     const active = currentElement();
+
+    // OK over fullscreen video raises the transport controls — the reference
+    // player's gesture, and the same one in live as on demand. Live used to
+    // fall through to the branch below and hit `enterFullscreen()`, which
+    // reports success for an already-fullscreen player and so swallowed the
+    // press: pause was unreachable with the picture up. On demand there is
+    // nothing focused at all, because entering the watch layout removes the
+    // button that started playback.
+    //
+    // Once focus is on a control, OK belongs to that control and falls
+    // through to the click below.
+    if (isTvFullscreen() && !isInsidePlayerControls(active)) {
+        return focusPlayerControls();
+    }
+
     if (!active) {
-        // OK over fullscreen video raises the transport controls — the
-        // reference player's gesture. Nothing is focused there because
-        // entering the watch layout removes whatever was: the button that
-        // started playback. Focusing a control is what reveals the bar, and
-        // the blanked shell leaves nothing else to focus.
-        return isTvFullscreen() ? focusPlayerControls() : false;
+        return false;
     }
 
     // Granting real focus is what raises the keyboard; no coaxing needed.
@@ -409,11 +419,12 @@ function activate(): boolean {
     // The benchmark's two-step OK: the first press on a channel tunes it and
     // the list survives; the second — the row is now the active one — commits
     // to fullscreen. OK on the player itself commits the same way.
-    // Not while fullscreen is locked: there the focused element IS a transport
-    // control, and enterFullscreen() reports success for an already-fullscreen
-    // player, which would swallow OK and leave Pause unpressable.
+    //
+    // Only before fullscreen. `enterFullscreen()` reports success for an
+    // already-fullscreen player, so leaving this reachable swallowed every OK
+    // aimed at a transport control — they all sit inside the player view.
     if (
-        !isTvFullscreenLocked() &&
+        !isTvFullscreen() &&
         (isActiveChannelRow(active) || isInsidePlayer(active))
     ) {
         if (enterFullscreen()) {
