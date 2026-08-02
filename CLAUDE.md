@@ -1081,6 +1081,6 @@ No formal migration system yet. Schema changes are applied via raw SQL in the `c
 
 ## Android TV Port (fork-only)
 
-This fork carries an Android TV port on the `androidtv/tvm-ui` branch. Its branch
+This fork carries an Android TV port on the `androidtv/main` branch. Its branch
 model, conflict-surface rules, target hardware and open decisions live in
 [`CLAUDE.android.md`](./CLAUDE.android.md) — read it before touching port code.
