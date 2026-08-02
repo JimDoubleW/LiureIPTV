@@ -113,6 +113,11 @@ function nativeStatusPatch(item: AndroidDownloadsStatusItem) {
                 status: 'downloading',
                 errorMessage: `Android paused the transfer (${item.reason})`,
             };
+        case 'exporting':
+            return {
+                status: 'downloading',
+                errorMessage: 'Copying into the selected folder',
+            };
         case 'successful':
             return {
                 status: 'completed',
@@ -122,7 +127,9 @@ function nativeStatusPatch(item: AndroidDownloadsStatusItem) {
         case 'failed':
             return {
                 status: 'failed',
-                errorMessage: `Android download failed (${item.reason})`,
+                errorMessage:
+                    item.errorMessage ??
+                    `Android download failed (${item.reason})`,
             };
         default:
             return {
@@ -158,9 +165,14 @@ export class AndroidDownloadsBridgeController {
             const row = await this.database.getById(id);
             return row ? toElectronItem(row) : null;
         },
-        downloadsGetDefaultFolder: () =>
-            Promise.resolve(DOWNLOAD_FOLDER_LABEL),
-        downloadsSelectFolder: () => Promise.resolve(DOWNLOAD_FOLDER_LABEL),
+        downloadsGetDefaultFolder: async () => {
+            const folder = await this.plugin.getSelectedFolder();
+            return folder.label ?? DOWNLOAD_FOLDER_LABEL;
+        },
+        downloadsSelectFolder: async () => {
+            const folder = await this.plugin.selectFolder();
+            return folder.uri ? folder.label ?? DOWNLOAD_FOLDER_LABEL : null;
+        },
         downloadsRevealFile: () =>
             Promise.resolve({
                 success: false,

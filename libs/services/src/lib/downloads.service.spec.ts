@@ -38,6 +38,7 @@ type DownloadsElectronStub = {
     >;
     downloadsSelectFolder?: jest.Mock<Promise<string | null>, []>;
     downloadsGetList: jest.Mock<Promise<DownloadItem[]>, [string?]>;
+    onDownloadsUpdate?: jest.Mock<() => void, [() => void]>;
 };
 
 describe('DownloadsService', () => {
@@ -116,6 +117,42 @@ describe('DownloadsService', () => {
             );
 
             expect(service.isAvailable()).toBe(false);
+        } finally {
+            injector.destroy();
+        }
+    });
+
+    it('hides only unsupported direct file actions on Android', async () => {
+        testWindow.electron = {
+            downloadsGetList: jest.fn(async () => []),
+            downloadsGetDefaultFolder: jest.fn(
+                async () => 'Android app downloads'
+            ),
+            onDownloadsUpdate: jest.fn((callback: () => void) => {
+                void callback;
+                return () => undefined;
+            }),
+        };
+        const injector = createEnvironmentInjector(
+            [
+                DownloadsService,
+                {
+                    provide: RuntimeCapabilitiesService,
+                    useValue: { supportsDownloads: true, isAndroid: true },
+                },
+            ],
+            Injector.NULL as unknown as EnvironmentInjector
+        );
+
+        try {
+            const service = runInInjectionContext(
+                injector,
+                () => new DownloadsService()
+            );
+
+            expect(service.isAvailable()).toBe(true);
+            expect(service.supportsFileActions()).toBe(false);
+            await service.loadDownloadFolder();
         } finally {
             injector.destroy();
         }

@@ -66,6 +66,14 @@ describe('AndroidDownloadsBridgeController', () => {
             enqueue: jest.fn().mockResolvedValue({ id: 'native-7' }),
             queryStatuses: jest.fn().mockResolvedValue({ items: [] }),
             remove: jest.fn().mockResolvedValue(undefined),
+            selectFolder: jest.fn().mockResolvedValue({
+                uri: 'content://downloads/tree/movies',
+                label: 'Movies',
+            }),
+            getSelectedFolder: jest.fn().mockResolvedValue({
+                uri: null,
+                label: 'Android app downloads',
+            }),
         };
         bridge = new AndroidDownloadsBridgeController(
             database as unknown as DownloadsDatabase,
@@ -133,6 +141,50 @@ describe('AndroidDownloadsBridgeController', () => {
                 bytesDownloaded: 2048,
                 totalBytes: 2048,
                 filePath: 'file:///downloads/Film_edition_speciale.mkv',
+            }),
+        ]);
+    });
+
+    it('exposes the persisted Android destination and opens the native picker', async () => {
+        await expect(bridge.downloadsGetDefaultFolder()).resolves.toBe(
+            'Android app downloads'
+        );
+        await expect(bridge.downloadsSelectFolder()).resolves.toBe('Movies');
+
+        expect(plugin.getSelectedFolder).toHaveBeenCalledTimes(1);
+        expect(plugin.selectFolder).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the current destination when the Android picker is canceled', async () => {
+        plugin.selectFolder.mockResolvedValueOnce({
+            uri: null,
+            label: null,
+        });
+
+        await expect(bridge.downloadsSelectFolder()).resolves.toBeNull();
+    });
+
+    it('keeps polling while Android exports a completed staging file', async () => {
+        await bridge.downloadsStart(payload);
+        plugin.queryStatuses.mockResolvedValueOnce({
+            items: [
+                {
+                    id: 'native-7',
+                    status: 'exporting',
+                    reason: 0,
+                    bytesDownloaded: 2048,
+                    totalBytes: 2048,
+                    localUri: null,
+                },
+            ],
+        });
+
+        await expect(bridge.downloadsGetList()).resolves.toEqual([
+            expect.objectContaining({
+                status: 'downloading',
+                bytesDownloaded: 2048,
+                totalBytes: 2048,
+                errorMessage: 'Copying into the selected folder',
             }),
         ]);
     });

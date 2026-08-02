@@ -19,6 +19,7 @@ export type AndroidDownloadsNativeStatus =
     | 'pending'
     | 'running'
     | 'paused'
+    | 'exporting'
     | 'successful'
     | 'failed'
     | 'unknown';
@@ -32,10 +33,19 @@ export interface AndroidDownloadsStatusItem {
     totalBytes: number | null;
     /** `file://…` (occasionally `content://…`) once known; null otherwise. */
     localUri: string | null;
+    /** Present when DownloadManager succeeded but export to the SAF folder failed. */
+    errorMessage?: string;
 }
 
 export interface AndroidDownloadsQueryResult {
     items: AndroidDownloadsStatusItem[];
+}
+
+export interface AndroidDownloadsFolderResult {
+    /** Persisted SAF document-tree URI, or null for the app-private default. */
+    uri: string | null;
+    /** Human-readable folder name shown in the Downloads screen. */
+    label: string | null;
 }
 
 /**
@@ -50,6 +60,8 @@ export interface AndroidDownloadsPlugin {
         ids: string[];
     }): Promise<AndroidDownloadsQueryResult>;
     remove(options: { ids: string[] }): Promise<void>;
+    selectFolder(): Promise<AndroidDownloadsFolderResult>;
+    getSelectedFolder(): Promise<AndroidDownloadsFolderResult>;
 }
 
 export const ANDROID_DOWNLOADS_PLUGIN = registerPlugin<AndroidDownloadsPlugin>(
