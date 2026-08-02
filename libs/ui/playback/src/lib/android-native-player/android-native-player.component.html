@@ -1,0 +1,12 @@
+<div class="android-native-player">
+    <div #surfaceHost class="android-native-player__surface"></div>
+
+    <app-player-controls
+        [controller]="sharedControls"
+        [playerSurface]="playerSurfaceElement()"
+        [mediaTitle]="mediaTitle()"
+        [showControls]="showControls()"
+        (previousEpisodeRequested)="previousEpisodeRequested.emit()"
+        (nextEpisodeRequested)="nextEpisodeRequested.emit()"
+    />
+</div>

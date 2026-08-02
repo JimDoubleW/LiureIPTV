@@ -81,6 +81,7 @@ class StubWebPlayerViewComponent {
     readonly streamUrl = input('');
     readonly title = input('');
     readonly playback = input<unknown>(null);
+    readonly playerOverride = input<unknown>(null);
     readonly externalFallbackRequested = output<unknown>();
 }
 

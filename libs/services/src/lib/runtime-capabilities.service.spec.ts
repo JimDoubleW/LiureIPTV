@@ -494,6 +494,36 @@ describe('RuntimeCapabilitiesService', () => {
         expect(service.supportsXtreamSqliteDataSource).toBe(true);
         expect(service.supportsXtreamSectionNavigation).toBe(true);
     });
+
+    describe('on the Android shell', () => {
+        const testGlobal = globalThis as unknown as {
+            Capacitor?: { getPlatform(): string };
+        };
+
+        afterEach(() => {
+            delete testGlobal.Capacitor;
+        });
+
+        it('reports isAndroid true and isElectron false even with the partial EPG-only bridge installed', () => {
+            testGlobal.Capacitor = { getPlatform: () => 'android' };
+            // android-epg-bridge.ts installs exactly this shape at
+            // window.electron — truthy, but not a real Electron bridge.
+            testWindow.electron = { fetchEpg: jest.fn() };
+
+            const service = new RuntimeCapabilitiesService();
+
+            expect(service.isAndroid).toBe(true);
+            expect(service.isElectron).toBe(false);
+            expect(service.isPwa).toBe(true);
+            expect(service.environment).toBe('pwa');
+        });
+
+        it('reports isAndroid false off the Capacitor Android platform', () => {
+            const service = new RuntimeCapabilitiesService();
+
+            expect(service.isAndroid).toBe(false);
+        });
+    });
 });
 
 function createPlaylistStorageBridge(): Record<string, jest.Mock> {

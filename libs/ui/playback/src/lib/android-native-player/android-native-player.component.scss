@@ -1,0 +1,24 @@
+:host {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.android-native-player {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.android-native-player__surface {
+    position: absolute;
+    inset: 0;
+    // Transparent so the native SurfaceView — composited behind the
+    // WebView by NativePlayerSurface.java, exactly at this element's
+    // bounds — shows through. This is the only element in the app given a
+    // transparent background; every other screen's CSS stays opaque, which
+    // is what keeps the WebView's own transparency (toggled only for the
+    // lifetime of a native session) invisible everywhere else.
+    background: transparent;
+    pointer-events: none;
+}

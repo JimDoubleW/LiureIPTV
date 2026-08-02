@@ -694,6 +694,190 @@ device's actual file manager. Other file managers may use yet other
 variants — the same reproduce-via-real-UI-then-read-logcat method applies if
 this recurs with a different one.
 
+## Fixed Bug: first native video playback attempt crashed with a CoordinatorLayout ClassCastException
+
+Found during on-device verification of the native ExoPlayer/Media3 player
+(Phase 1, see Decisions below), the moment a channel was actually clicked —
+the app had cold-started fine and the plugin had registered fine; only
+attaching the video surface crashed it. Logcat's crash buffer
+(`logcat -b crash -d`, more reliable than the main buffer once the app dies —
+the main ring buffer keeps filling with unrelated system noise and evicts the
+actual stack trace within seconds on a shared TV box) showed:
+
+```
+FATAL EXCEPTION: main
+java.lang.ClassCastException: android.widget.FrameLayout$LayoutParams cannot be cast to androidx.coordinatorlayout.widget.CoordinatorLayout$LayoutParams
+	at androidx.coordinatorlayout.widget.CoordinatorLayout.getResolvedLayoutParams(CoordinatorLayout.java:696)
+	at androidx.coordinatorlayout.widget.CoordinatorLayout.prepareChildren(CoordinatorLayout.java:737)
+```
+
+Root cause: `NativePlayerSurface.attach()` adds the `SurfaceView` into
+`(ViewGroup) getBridge().getWebView().getParent()` — correct, per the plan,
+since that parent (`capacitor_bridge_layout_main.xml`) is what lets a sibling
+view composite behind the WebView — but built its `LayoutParams` as plain
+`FrameLayout.LayoutParams`. The parent is actually a `CoordinatorLayout`,
+which casts *every* child's `LayoutParams` to its own type during
+measure/layout (`CoordinatorLayout.getResolvedLayoutParams`), regardless of
+what type the child's *view* is. This crashed on the very first
+`prepareChildren()` pass after `addView()`, i.e. immediately, every time.
+
+Fix: `NativePlayerSurface.toLayoutParams()` now builds
+`CoordinatorLayout.LayoutParams` instead (still just `leftMargin`/`topMargin`
++ explicit width/height — `CoordinatorLayout.LayoutParams` extends
+`ViewGroup.MarginLayoutParams` the same as `FrameLayout.LayoutParams` does, so
+no other call site needed to change). The `androidx.coordinatorlayout`
+dependency was already present in `app/build.gradle` (pulled in by Capacitor
+itself), so this was a one-file fix.
+
+Verified on the reference device after the fix: clicking a live channel no
+longer crashes (`adb shell pidof com.liureiptv.tv` kept returning the same
+PID across playback start, channel switches, and navigating away).
+
+## Fixed Bug: native video was actually invisible — `dumpsys SurfaceFlinger` alone is not proof, only the user's own eyes are
+
+**This entry has been wrong twice.** It first corrected a bad reading of
+`dumpsys SurfaceFlinger`, then shipped a second wrong root cause — also as
+"verified." Worth reading in full before concluding anything about this
+device's compositor.
+
+**Current, confirmed root cause: an opaque DOM ancestor.** Punch-through
+works fine on this silicon. The workspace shell's `.workspace-shell`,
+`.workspace-body` and `.workspace-content` each paint an opaque background
+across the player's rect, so the WebView never had a single transparent
+pixel for the SurfaceView behind it to show through. `background:
+transparent` on the player's own placeholder does nothing about this —
+transparency reveals the *parent*, it does not punch a hole. Making those
+three transparent for the session's lifetime
+(`.native-video-punchthrough` on `<html>`, see
+`workspace-shell.component.scss`) makes the picture appear with the surface
+in its default position, behind the window. The `setZOrderOnTop` toggle
+described below has been removed.
+
+The rest of this entry is kept because the reasoning that produced the wrong
+answer is the useful part.
+
+After the crash fix above, the first playback attempt showed audio
+(`positionSeconds` advancing, `status: "playing"`) but `adb exec-out
+screencap -p` showed flat black where video should be. `dumpsys
+SurfaceFlinger` on the same frame showed the SurfaceView layer with
+`composition type=DEVICE` (hardware-overlay composition) and a real
+`activeBuffer=[1280x720:...]` at the correct position — this was reasoned to
+mean the video was genuinely compositing, just invisible to `screencap`
+specifically because it reads the GPU framebuffer and a hardware-overlay
+plane bypasses it. That reasoning was recorded here as fact.
+
+**It was wrong.** The user then watched the actual physical screen and
+reported plainly: "No video, only sound!" `dumpsys SurfaceFlinger` proves a
+layer exists with a real decoded buffer at the right position — it does
+**not** prove the hardware composer successfully blended that layer with
+whatever is on top of it. Those are different questions, and only the
+physical display (or, short of that, a capture method that actually goes
+through the same compositor path the display does) answers the second one.
+
+Root cause, found by elimination across two follow-up attempts:
+
+1. **TextureView follow-up** — the standard fix for "SurfaceView doesn't
+   composite behind a transparent overlay" is TextureView, since it draws
+   through the ordinary GPU pass instead of a separate hardware plane.
+   Rebuilt `NativePlayerSurface` around it, added temporary logging, and
+   confirmed on-device that `onSurfaceTextureAvailable` fired with correct
+   bounds/alpha/visibility and `onSurfaceTextureUpdated` fired repeatedly —
+   real decoded frames genuinely reaching the texture, composited in the
+   same draw pass as the (correctly rendering) surrounding UI. **Still
+   black.** This ruled out positioning, visibility, and hardware-plane
+   blending as the cause for this path, and pointed at a GL `external OES`
+   texture-sampling incompatibility between this vendor's decoder buffer
+   format and this Mali-G310 driver — a different failure at a different
+   layer than the SurfaceView case, not fixable by switching view types.
+2. **`setZOrderOnTop(true)` diagnostic** — reverted to SurfaceView, but
+   forced it fully above the entire window instead of blending behind the
+   WebView. **This showed a real picture** (confirmed via screenshot: an
+   actual TFou cartoon frame on TF1, not black). This was read as
+   conclusive: the vendor HWC supposedly cannot alpha-blend the transparent
+   WebView's layer over a separate video overlay plane, so only removing the
+   blend requirement entirely could work on this silicon.
+
+   **That inference was invalid**, and the flaw is worth naming because it
+   looks airtight. Going on top changes *two* things at once: the surface
+   stops needing a blend, **and** it stops being covered by the DOM. The
+   experiment cannot distinguish them, yet only the first was considered —
+   the DOM was assumed transparent because the *placeholder* element had
+   `background: transparent` and `webView.setBackgroundColor(TRANSPARENT)`
+   had been called. Neither says anything about the ancestors in between.
+   The controlled version of this test holds the surface behind the window
+   and changes only the DOM: from the WebView's own DevTools console, walk
+   the placeholder's `parentElement` chain and clear every non-transparent
+   `backgroundColor` (re-applying on an interval, since Angular re-renders).
+   Only three elements had one; with those cleared the picture appears with
+   the surface behind, which falsifies the HWC-blending theory outright.
+   (At the time this was run, the z-order could be forced from the console
+   through the plugin's since-removed `setControlsVisible`; today the
+   surface is always behind, so no such lever is needed.)
+
+**The withdrawn fix** (kept here so it is recognisable if it reappears):
+keep SurfaceView, keep `setZOrderOnTop`, but toggle it live —
+`NativePlayerSurface.setControlsVisible(boolean)` flipping
+`setZOrderOnTop(!controlsVisible)`, driven from
+`PlayerControlsComponent`'s own `controlsAreVisible` signal so the surface
+sat on top exactly while the DOM controls were hidden. It was verified on
+the device and it did show video, which is why it shipped.
+
+It was still a bad trade, for reasons visible without any hardware:
+
+- **The video covered the app's own controls.** The transport bar, EPG
+  timeline and back button were unreachable *by construction* whenever
+  video was visible. Combined with `MainActivity.dispatchKeyEvent`
+  consuming every D-pad key for `__tvKeyDispatch`, and the controls
+  reappearing only via that same auto-hide timer, the practical result was
+  that the controls were reachable for the first 2.5s of a session and
+  never again.
+- **It destroyed and recreated the Surface mid-playback.** `setZOrderOnTop`
+  after the containing window is attached recreates the underlying Surface,
+  so every controls show/hide invalidated ExoPlayer's render target — for
+  the entire lifetime of every session.
+- **It made the auto-hide delay load-bearing for video visibility**, so
+  raising the 2.5s delay to something reasonable for a 10-foot UI would
+  have directly lengthened the black-screen window.
+
+**The shipped fix**: SurfaceView in its default position (no `setZOrder*`
+call at all), plus the DOM half of the punch-through —
+`AndroidNativePlayerComponent` adds `.native-video-punchthrough` to
+`<html>` for the session's lifetime, and `workspace-shell.component.scss`
+turns off exactly the three backgrounds that covered the rect. The whole
+`setControlsVisible` chain (plugin method, command runner, session
+controller, component effect) is deleted. Controls now draw *over* the
+video like every other engine's, and no Surface is ever recreated.
+
+Regression coverage:
+`android-native-player.component.punchthrough.spec.ts` asserts the class is
+added for an active session and removed on teardown — the teardown half
+matters because the class makes the app's own backgrounds transparent
+app-wide, so leaking it shows the black Android window everywhere.
+
+**General lessons**, in the order they were learned the hard way:
+
+1. `dumpsys SurfaceFlinger` showing a correctly-positioned, correctly-typed,
+   non-empty buffer is evidence decode and layer registration are healthy —
+   it is not evidence of what actually reaches the panel. Only a physical
+   look at the screen (or `screencap` once you've confirmed the surface is
+   *not* on a bypassed plane) settles whether compositing succeeded.
+2. **When a layer is invisible, suspect the app before the driver.** Both
+   wrong conclusions here blamed the vendor, and the actual cause was three
+   CSS backgrounds. A driver limitation is the most expensive explanation
+   available — it justifies shipping a workaround — so it needs the
+   strongest evidence, not the weakest.
+3. **A fix that works is not the same as a diagnosis that holds.**
+   `setZOrderOnTop(true)` genuinely made video appear, which felt like
+   proof; it changed two variables at once and proved nothing about which
+   one mattered. Before concluding from an experiment, ask what *else* it
+   changed.
+4. **Verify the console is attached to the app.** A long stretch of this
+   investigation ran against `chrome://inspect`'s own page — snippets
+   returned success while touching nothing, because the DOM query failed
+   silently. Check `location.href` first; on Android the app's target is
+   the `inspect` link under the package entry, or
+   `http://localhost:9222/json/list`.
+
 ## Partial in-app rebrand: splash and welcome screen only
 
 The native Android identity (`applicationId com.liureiptv.tv`, launcher label,
@@ -928,6 +1112,83 @@ subset. Two adapters already exist as precedent:
 Engine *selection* is still an `@if` chain in
 `libs/ui/playback/src/lib/web-player-view/web-player-view.component.html`.
 Contract: `docs/architecture/player-controls-contract.md`.
+
+**Phase 1 shipped and verified on the reference device — with a real
+mid-flight architecture change; read the fixed-bug entry above
+("native video was actually invisible") before touching compositing here.**
+Scope: live TS/HLS across all three portal types (M3U, Xtream, Stalker),
+capability flags `{volume: true, seek: !isLive, fullscreen: true}` only —
+audio tracks, subtitles, playback speed, aspect ratio, recording, PiP, series
+navigation and DRM are still unimplemented (adapter reports them `false`; no
+UI control renders). The engine is an **unconditional override on Android**,
+not a Settings-selectable option — applied through the same `[playerOverride]`
+mechanism DASH already uses to force HTML5, with DASH still taking precedence
+over it (`.mpd` channels keep routing to the existing Shaka path even on
+Android; `isDashStreamUrl` guards every override site).
+
+- **Compositing: punch-through, as originally planned.** `attach()` inserts
+  the `SurfaceView` at index 0 of
+  `(ViewGroup) getBridge().getWebView().getParent()` and flips
+  `webView.setBackgroundColor()` transparent for the session's lifetime; no
+  `setZOrder*` call is made, so the surface keeps its default position
+  behind the window. The WebView half is not sufficient on its own: the DOM
+  must also stop painting over the rect, which
+  `AndroidNativePlayerComponent` handles by adding
+  `.native-video-punchthrough` to `<html>` for the session
+  (`workspace-shell.component.scss` then drops the three workspace
+  backgrounds, and `tv-focus.styles.ts` drops the TV-fullscreen black
+  backdrop, which is an ancestor of the placeholder and would otherwise
+  black out the video the instant the player goes fullscreen — the class
+  name is shared through `NATIVE_VIDEO_PUNCH_THROUGH_CLASS` in
+  `@iptvnator/shared/interfaces`, which lives there rather than beside the
+  player because `tv-focus.styles.ts` is reached from `main.ts` and the
+  `@iptvnator/ui/playback` barrel would drag every engine into the initial
+  bundle). An interim revision instead toggled `setZOrderOnTop` live
+  against the DOM controls' visibility, on the mistaken conclusion that the
+  vendor HWC (Amlogic S905X5M) could not blend the two layers — see the
+  fixed-bug entry above for why that was wrong and why it was withdrawn.
+- **Bounds conversion is native-side, round-once-per-edge**, mirroring
+  `embedded-mpv-bounds.util.ts`: JS sends unrounded CSS-px bounds plus
+  `window.devicePixelRatio`; `NativePlayerViewBounds.toDevicePixels()` scales
+  each edge once, after scaling, to avoid 1px seams. Verified correct
+  end-to-end via `dumpsys SurfaceFlinger`'s reported `displayFrame`/
+  `visibleRegion` matching the CSS bounds × DPR exactly, including through a
+  live sidebar-collapse bounds-sync (`[1566,112,1920,691]` →
+  `[166,112,1920,691]` when the channel sidebar was hidden).
+- **MIME hinting matters.** Xtream/Stalker live URLs routinely have no
+  extension; `AndroidNativePlayerPlugin.resolveMimeType()` hints
+  `MimeTypes.VIDEO_MP2T` for extensionless/`.ts` URLs and
+  `MimeTypes.APPLICATION_M3U8` for `.m3u8` — without this, TS sniffing was
+  the actual risk flagged in planning and would have silently failed exactly
+  the URLs this feature exists to fix.
+- **On-device verification** (Xiaomi TV Box S, live Xtream `.ts` channel,
+  "TF1 SD"): hardware decoder confirmed via logcat
+  (`c2.amlogic.avc.decoder`, not software fallback); video confirmed
+  **actually visible** via a real screenshot showing genuine picture content
+  (not just `dumpsys SurfaceFlinger` bookkeeping — see the fixed-bug entry
+  above for why that alone was insufficient and misled an earlier pass of
+  this file) both immediately after a channel switch and again once controls
+  auto-hid a few seconds later; position advancing continuously without
+  stalls or decoder recreation for 115+ seconds; bounds-sync verified across
+  a live sidebar-collapse UI change; channel switching
+  verified clean (`dispose` on the old session id, `create` with a fresh
+  one, SurfaceView layer count never grows); navigating away verified clean
+  (`dispose` fires, WebView background restores, dashboard renders with no
+  transparency leak). Fullscreen bounds-sync, a Stalker MAG channel, and an
+  M3U `.m3u8` channel were not separately exercised this pass — worth a spot
+  check before relying on them.
+- **Known cosmetic quirk, not a bug**: `positionSeconds` for a continuous raw
+  TS live stream periodically resets backward by several seconds (TsExtractor
+  re-estimating duration from newly received PCR data). Invisible to users in
+  Phase 1 scope since `seek` is `false` for live (no scrubber renders), but
+  worth knowing before wiring any live-position UI in a later phase.
+- **The DOM draws over the video, which is what punch-through buys.**
+  Controls, dialogs and overlays composite on top of the picture normally,
+  including semi-transparent ones — the WebView layer's alpha is blended
+  against the surface behind it. The frame-copy architecture Electron's
+  embedded-mpv uses on desktop (render off-screen, copy into shared memory,
+  upload as a `<canvas>` texture) is therefore **not** needed here; it was
+  only ever considered as an escape from the withdrawn z-order workaround.
 
 ## WebView Origin Contract
 

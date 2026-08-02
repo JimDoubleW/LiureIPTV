@@ -79,7 +79,9 @@
                         [playerOverride]="
                             activeChannelIsDash()
                                 ? dashPlayerOverride()
-                                : (playerSettings.player ?? null)
+                                : (androidNativePlayerOverride() ??
+                                  playerSettings.player ??
+                                  null)
                         "
                         [volume]="volume()"
                         (externalFallbackRequested)="

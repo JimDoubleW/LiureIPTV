@@ -68,6 +68,16 @@
         (previousEpisodeRequested)="previousEpisodeRequested.emit()"
         (nextEpisodeRequested)="nextEpisodeRequested.emit()"
     />
+} @else if (selectedPlayer() === 'android-native') {
+    <app-android-native-player
+        [playback]="resolvedPlayback()"
+        [mediaTitle]="resolvedMediaTitle()"
+        [seriesNavigation]="seriesNavigation()"
+        (timeUpdate)="timeUpdate.emit($event)"
+        (playbackEnded)="playbackEnded.emit()"
+        (previousEpisodeRequested)="previousEpisodeRequested.emit()"
+        (nextEpisodeRequested)="nextEpisodeRequested.emit()"
+    />
 } @else {
     @defer (on immediate) {
         <app-vjs-player

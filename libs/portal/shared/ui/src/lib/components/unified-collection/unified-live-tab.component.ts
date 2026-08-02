@@ -17,6 +17,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
     applyChannelNameStrip,
     getM3uArchiveDays,
+    isDashStreamUrl,
     isM3uCatchupPlaybackSupported,
     resolveM3uCatchupUrl,
 } from '@iptvnator/shared/m3u-utils';
@@ -60,7 +61,7 @@ import {
 } from '@iptvnator/ui/playback';
 import { ResizableDirective } from '@iptvnator/ui/components';
 import { RuntimeCapabilitiesService, SettingsStore } from '@iptvnator/services';
-import { EpgProgram } from '@iptvnator/shared/interfaces';
+import { EpgProgram, VideoPlayer } from '@iptvnator/shared/interfaces';
 
 @Component({
     selector: 'app-unified-live-tab',
@@ -108,6 +109,21 @@ export class UnifiedLiveTabComponent {
     private readonly translate = inject(TranslateService);
 
     readonly player = this.settingsStore.player;
+    /**
+     * Native ExoPlayer is an unconditional override on Android — "from the
+     * start, not a fallback" — not a Settings-selectable choice, since the
+     * WebView-based engines are known-broken there (4K plays audio-only).
+     * This host has no DASH handling today (unlike the M3U player, which
+     * forces HTML5/Shaka for `.mpd` channels); the `isDashStreamUrl` guard
+     * here is new, cheap insurance against a rare `.mpd` portal live URL
+     * reaching ExoPlayer, which has no DRM/ClearKey support in this phase.
+     */
+    readonly androidNativePlayerOverride = computed<VideoPlayer | null>(() =>
+        this.runtime.isAndroid &&
+        !isDashStreamUrl(this.inlinePlayback()?.streamUrl)
+            ? VideoPlayer.AndroidNative
+            : null
+    );
     readonly supportsEpg = this.runtime.supportsEpg;
     readonly isEmbeddedPlayer = computed(() =>
         this.portalPlayer.isEmbeddedPlayer()

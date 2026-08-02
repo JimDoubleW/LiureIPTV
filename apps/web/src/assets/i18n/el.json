@@ -469,6 +469,10 @@
         "UNMUTE": "Κατάργηση σίγασης",
         "VOLUME": "Ένταση"
     },
+    "ANDROID_NATIVE_PLAYER": {
+        "LOADING_STREAM": "Loading stream…",
+        "PLAYBACK_FAILED": "Playback failed."
+    },
     "EMBEDDED_MPV": {
         "PLAYER": {
             "BACK": "Πίσω",

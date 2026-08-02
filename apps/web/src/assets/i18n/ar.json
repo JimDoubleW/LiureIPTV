@@ -469,6 +469,10 @@
         "UNMUTE": "إلغاء كتم الصوت",
         "VOLUME": "مستوى الصوت"
     },
+    "ANDROID_NATIVE_PLAYER": {
+        "LOADING_STREAM": "Loading stream…",
+        "PLAYBACK_FAILED": "Playback failed."
+    },
     "EMBEDDED_MPV": {
         "PLAYER": {
             "BACK": "رجوع",

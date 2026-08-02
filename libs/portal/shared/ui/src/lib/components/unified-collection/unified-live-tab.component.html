@@ -61,7 +61,9 @@
                         [streamUrl]="currentStreamUrl()"
                         [title]="activeDetail()?.playback?.title ?? ''"
                         [playback]="inlinePlayback()"
-                        [playerOverride]="player()"
+                        [playerOverride]="
+                            androidNativePlayerOverride() ?? player()
+                        "
                         (externalFallbackRequested)="
                             handleExternalFallbackRequest($event)
                         "

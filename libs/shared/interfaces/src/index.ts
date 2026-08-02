@@ -1,3 +1,4 @@
+export * from './lib/android-native-player.interface';
 export * from './lib/channel-drm.interface';
 export * from './lib/channel.interface';
 export * from './lib/channel.model';
@@ -41,6 +42,7 @@ export * from './lib/store-keys.enum';
 export * from './lib/stream-format.enum';
 export * from './lib/catalog-title-match.interface';
 export * from './lib/theme.enum';
+export * from './lib/native-video-punch-through.util';
 export * from './lib/season-marker.util';
 export * from './lib/title-normalization.util';
 export * from './lib/tmdb.interface';

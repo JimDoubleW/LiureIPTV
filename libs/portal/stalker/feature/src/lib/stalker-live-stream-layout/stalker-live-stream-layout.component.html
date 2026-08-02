@@ -179,6 +179,7 @@
                         [streamUrl]="streamUrl()"
                         [title]="activePlayback()?.title ?? ''"
                         [playback]="activePlayback()"
+                        [playerOverride]="androidNativePlayerOverride()"
                         (externalFallbackRequested)="
                             handleExternalFallbackRequest($event)
                         "

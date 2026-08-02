@@ -18,6 +18,7 @@ public class MainActivity extends BridgeActivity {
         // which is how BackupImportPlugin sees a share that cold-started the
         // app, not just one that arrives while it is already running.
         registerPlugin(BackupImportPlugin.class);
+        registerPlugin(AndroidNativePlayerPlugin.class);
         super.onCreate(savedInstanceState);
     }
 

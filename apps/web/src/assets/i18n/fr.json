@@ -469,6 +469,10 @@
         "UNMUTE": "Activer le son",
         "VOLUME": "Volume"
     },
+    "ANDROID_NATIVE_PLAYER": {
+        "LOADING_STREAM": "Chargement du flux…",
+        "PLAYBACK_FAILED": "Échec de la lecture."
+    },
     "EMBEDDED_MPV": {
         "PLAYER": {
             "BACK": "Retour",

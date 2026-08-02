@@ -469,6 +469,10 @@
         "UNMUTE": "음소거 해제",
         "VOLUME": "볼륨"
     },
+    "ANDROID_NATIVE_PLAYER": {
+        "LOADING_STREAM": "Loading stream…",
+        "PLAYBACK_FAILED": "Playback failed."
+    },
     "EMBEDDED_MPV": {
         "PLAYER": {
             "BACK": "뒤로",

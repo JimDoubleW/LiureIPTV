@@ -13,6 +13,14 @@ export enum VideoPlayer {
     MPV = 'mpv',
     VLC = 'vlc',
     ArtPlayer = 'artplayer',
+    /**
+     * Native ExoPlayer/Media3 behind a Capacitor plugin (Android only). Not
+     * a user-selectable Settings option — it is an unconditional
+     * `playerOverride` on Android, the same mechanism DASH already uses to
+     * force HTML5 regardless of the stored setting. See
+     * `libs/ui/playback/src/lib/android-native-player/`.
+     */
+    AndroidNative = 'android-native',
 }
 
 /**

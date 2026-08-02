@@ -31,6 +31,7 @@ import { VodSourceRowComponent } from '@iptvnator/ui/components';
 
 /** How many recovery options the error screen shows before it stops helping. */
 const ERROR_SCREEN_ALTERNATIVES = 5;
+import { AndroidNativePlayerComponent } from '../android-native-player/android-native-player.component';
 import { ArtPlayerComponent } from '../art-player/art-player.component';
 import { EmbeddedMpvPlayerComponent } from '../embedded-mpv-player/embedded-mpv-player.component';
 import { HtmlVideoPlayerComponent } from '../html-video-player/html-video-player.component';
@@ -70,6 +71,7 @@ function resolveWebPlayerSharedControls(): boolean {
         class: 'web-player-view',
     },
     imports: [
+        AndroidNativePlayerComponent,
         ArtPlayerComponent,
         ClipboardModule,
         EmbeddedMpvPlayerComponent,

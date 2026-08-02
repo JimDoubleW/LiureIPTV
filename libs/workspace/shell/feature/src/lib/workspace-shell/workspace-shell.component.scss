@@ -66,6 +66,26 @@ app-workspace-shell-context-sidebar {
 }
 
 
+// Android native video (ExoPlayer) renders into a SurfaceView composited
+// BEHIND the WebView, so it is only visible through pixels the WebView leaves
+// fully transparent. `background: transparent` on the player's own placeholder
+// is not enough — transparency reveals the parent, and these three containers
+// each paint an opaque colour across the player's rect, which is what made the
+// video decode correctly yet never reach the screen.
+//
+// `AndroidNativePlayerComponent` puts `.native-video-punchthrough` on <html>
+// for the lifetime of a native session. Verified on the reference device
+// (Amlogic S905X5M): these three are the complete set — html, body and every
+// other ancestor already compute to transparent, and no other surface changes
+// appearance while the class is on.
+:host-context(.native-video-punchthrough) {
+    .workspace-shell,
+    .workspace-body,
+    .workspace-content {
+        background: transparent;
+    }
+}
+
 @media (max-width: 780px) {
     .workspace-shell {
         grid-template-columns: 56px 1fr;

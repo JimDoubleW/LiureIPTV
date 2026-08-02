@@ -27,10 +27,16 @@ export class RuntimeCapabilitiesService {
         // up the EPG paths. That does not make the environment Electron: the
         // data service stays PwaService, and isPwa-derived capabilities (e.g.
         // supportsXtreamSectionNavigation) must keep answering as the PWA.
-        return !!this.electronBridge && !this.isAndroidShell;
+        return !!this.electronBridge && !this.isAndroid;
     }
 
-    private get isAndroidShell(): boolean {
+    /**
+     * True inside the Capacitor Android shell. Public so libs can gate
+     * Android-only behavior — e.g. forcing the native ExoPlayer engine — via
+     * this service instead of importing `apps/web`'s `isAndroidRuntime()`,
+     * which libs must not depend on.
+     */
+    get isAndroid(): boolean {
         const capacitor = (
             globalThis as { Capacitor?: { getPlatform?: () => string } }
         ).Capacitor;
