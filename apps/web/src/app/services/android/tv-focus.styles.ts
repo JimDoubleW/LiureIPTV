@@ -1,3 +1,4 @@
+import { NATIVE_VIDEO_PUNCH_THROUGH_CLASS } from '@iptvnator/shared/interfaces';
 import { SELECTED_ATTRIBUTE } from './focus-zones';
 import { REGION_ATTRIBUTE } from './panel-region';
 import { TV_FULLSCREEN_ATTRIBUTE } from './player-keys';
@@ -98,7 +99,40 @@ const TV_FOCUS_CSS = `
     position: fixed !important;
     inset: 0 !important;
     z-index: 2147483000 !important;
+}
+
+/*
+ * Letterbox fill for the web engines only. The Android native engine draws
+ * behind the WebView, so an opaque backdrop on this ancestor would cover the
+ * video the instant the player goes fullscreen — the exact defect the
+ * punch-through class exists to prevent. Its own SurfaceView already renders
+ * unused area black, so nothing is lost by omitting it there.
+ */
+[data-tv-nav][${TV_FULLSCREEN_ATTRIBUTE}]:not(.${NATIVE_VIDEO_PUNCH_THROUGH_CLASS})
+    app-web-player-view {
     background: #000 !important;
+}
+
+/*
+ * Hide the rest of the app while the player owns the screen.
+ *
+ * The backdrop above used to do this implicitly — an opaque layer pinned over
+ * everything both filled the letterbox and masked the lists behind it. The
+ * native engine cannot have that layer, and its video comes from BEHIND the
+ * WebView, so without this the category list, channel list and EPG panel all
+ * stayed painted on top of fullscreen video.
+ *
+ * Uses visibility rather than display: it inherits, so one rule blanks the
+ * whole shell and the player subtree switches itself back on, with no layout
+ * recalculation that would churn the native surface's bounds. CDK overlays
+ * (dialogs, menus) live outside the shell and are deliberately unaffected.
+ */
+[data-tv-nav][${TV_FULLSCREEN_ATTRIBUTE}] .workspace-shell {
+    visibility: hidden !important;
+}
+
+[data-tv-nav][${TV_FULLSCREEN_ATTRIBUTE}] app-web-player-view {
+    visibility: visible !important;
 }
 
 [data-tv-nav][${TV_FULLSCREEN_ATTRIBUTE}] app-web-player-view .video-js,

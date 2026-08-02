@@ -29,6 +29,18 @@ const PLAYER_VIEW_SELECTOR = 'app-web-player-view';
 const CHANNEL_ROW_SELECTOR = '.channel-list-item';
 const ACTIVE_ROW_CLASS = 'active';
 
+/**
+ * "Is something actually playing to enlarge?" — asked of the DOM, so it has
+ * to name every engine's surface. `video` covers the web players; the Android
+ * native engine (ExoPlayer, the default on this port) has no `<video>` at all,
+ * only a placeholder div the native SurfaceView is bounds-synced against, so a
+ * `video`-only test made fullscreen permanently unreachable there.
+ */
+const PLAYBACK_SURFACE_SELECTOR = [
+    `${PLAYER_VIEW_SELECTOR} video`,
+    `${PLAYER_VIEW_SELECTOR} app-android-native-player`,
+].join(', ');
+
 export function isInsidePlayer(element: Element): boolean {
     return element.closest(PLAYER_VIEW_SELECTOR) !== null;
 }
@@ -48,7 +60,7 @@ export function enterFullscreen(): boolean {
     if (isTvFullscreen()) {
         return true;
     }
-    if (!document.querySelector(`${PLAYER_VIEW_SELECTOR} video`)) {
+    if (!document.querySelector(PLAYBACK_SURFACE_SELECTOR)) {
         return false;
     }
 

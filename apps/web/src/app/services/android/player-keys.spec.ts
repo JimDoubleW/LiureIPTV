@@ -43,6 +43,22 @@ describe('player keys', () => {
             ).toBe(false);
         });
 
+        it('pins the player for the Android native engine, which has no <video>', () => {
+            // ExoPlayer renders into a native SurfaceView composited behind
+            // the WebView; the DOM holds only a bounds placeholder. Testing
+            // for `video` alone made fullscreen permanently unreachable on
+            // the very engine this port defaults to.
+            document.body.innerHTML =
+                '<app-web-player-view><app-android-native-player>' +
+                '<div class="android-native-player__surface"></div>' +
+                '</app-android-native-player></app-web-player-view>';
+
+            expect(enterFullscreen()).toBe(true);
+            expect(
+                document.documentElement.hasAttribute(TV_FULLSCREEN_ATTRIBUTE)
+            ).toBe(true);
+        });
+
         it('reports nothing to exit when not fullscreen', () => {
             // goBack uses this to fall through to the overlay/history branches.
             expect(exitFullscreen()).toBe(false);

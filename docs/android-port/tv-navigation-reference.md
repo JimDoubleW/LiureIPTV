@@ -286,7 +286,7 @@ The playback side of this contract now exists in the Android engine
 | Gesture | Status |
 | --- | --- |
 | OK first press on a channel — tune, list survives | done (was already the app's click behaviour) |
-| OK second press on the playing channel, or on the player — fullscreen | done, as *layout* fullscreen: key presses arrive via `evaluateJavascript`, which carries no user activation, so `requestFullscreen` rejects — the player host is pinned `fixed inset:0` behind a `data-tv-fullscreen` attribute instead |
+| OK second press on the playing channel, or on the player — fullscreen | done, as *layout* fullscreen: key presses arrive via `evaluateJavascript`, which carries no user activation, so `requestFullscreen` rejects — the player host is pinned `fixed inset:0` behind a `data-tv-fullscreen` attribute instead. `enterFullscreen()` refuses when nothing is playing, and that test must name **every** engine's surface: the Android native engine has no `<video>` at all (ExoPlayer draws into a SurfaceView; the DOM holds only a bounds placeholder), so a `video`-only check silently made fullscreen unreachable on the port's default engine |
 | UP/DOWN over fullscreen video — next/previous channel | done, by activating the adjacent `.channel-list-item` row; no-op when virtual scrolling has dropped the active row |
 | LEFT over fullscreen video — reveal the channel list | done (exits the layout fullscreen) |
 | BACK over fullscreen video — step back to the list | done; runs before the overlay/history branches, or BACK would leave the page |
