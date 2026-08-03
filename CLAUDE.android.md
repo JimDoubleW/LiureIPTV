@@ -902,18 +902,26 @@ Changed:
   each resource's current dimensions (48–192 px for standard/round and
   108–432 px for adaptive foreground); do not replace the shared Web/PWA
   icons under `apps/web/src/assets/icons/` as part of an Android-only rebrand.
+- `android/app/src/main/res/drawable/tv_banner.png`: the 1672×941 Leanback
+  banner referenced by `AndroidManifest.xml` uses the same Puy de Dôme mark
+  with the LiureIPTV wordmark. Keep the basename and 16:9 proportions:
+  launchers that prefer `android:banner` do not fall back to the square mipmap
+  icon.
 - `apps/web/src/index.html`: `<title>`, the splash's `aria-label`, and the
-  branded `assets/icons/liureiptv-splash.png` image. The black background and
-  bounded `vmin` sizing keep the WebView bootstrap screen visually continuous
-  with the native Android launch screen instead of flashing back to the old
-  text-and-spinner branding.
+  branded `assets/icons/liureiptv-splash.png` image. The full-bleed 16:9
+  artwork is generated from Android's `drawable/tv_banner.png`; its matching
+  `#02131D` fallback keeps the Android TV WebView bootstrap screen visually
+  continuous with the native launch screen instead of flashing back to the
+  old text-and-spinner branding.
 - `android/app/src/main/res/drawable*/splash.png`: the same LiureIPTV artwork
-  is centered without distortion on black canvases at every existing
-  landscape/portrait density. Keep the resource basename `splash.png`:
-  `AppTheme.NoActionBarLaunch` references `@drawable/splash`, and Android TV
-  normally resolves the landscape density variant. Android 12+ additionally
-  requires `windowSplashScreenAnimatedIcon`; its square source is
-  `drawable/liureiptv_splash_icon.png`, and `MainActivity` must call
+  is generated from `drawable/tv_banner.png` at every existing
+  landscape/portrait density. Landscape assets use a centre crop without
+  distortion; portrait assets preserve the complete 16:9 banner on the
+  matching dark canvas. Android 12+ owns the first launch frame and only
+  accepts a solid `windowSplashScreenBackground` plus a centred
+  `windowSplashScreenAnimatedIcon`, so `drawable/liureiptv_splash_icon.png`
+  contains the banner's rounded-square mark and `values/colors.xml` supplies
+  the matching `#02131D`. `MainActivity` must call
   `SplashScreen.installSplashScreen(this)` before `super.onCreate()`.
 - `HOME.PLAYLISTS.WELCOME_TITLE` in `en.json`/`fr.json` — the big headline on
   the empty-dashboard "add your first playlist" screen

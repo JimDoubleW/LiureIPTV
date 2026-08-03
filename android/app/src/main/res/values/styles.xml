@@ -17,14 +17,12 @@
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <!-- Android 12+ renders a system-owned splash and ignores a plain
-             window background for its icon. Keep the full bitmap below for
-             older devices, and provide the dedicated system-splash contract
-             so the same LiureIPTV mark appears from the very first frame. -->
-        <item name="windowSplashScreenBackground">#000000</item>
+        <!-- Android 12+ and the AndroidX compatibility layer render the
+             system-owned splash from a single opaque color and a centered
+             adaptive-icon-safe drawable. -->
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/liureiptv_splash_icon</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
-        <item name="android:windowBackground">@drawable/splash</item>
-        <item name="android:background">@drawable/splash</item>
+        <item name="android:windowBackground">@color/splash_background</item>
     </style>
 </resources>
