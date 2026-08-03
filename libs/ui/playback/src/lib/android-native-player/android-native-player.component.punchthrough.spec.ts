@@ -51,9 +51,7 @@ describe('AndroidNativePlayerComponent punch-through', () => {
             setVolume: jest.fn().mockResolvedValue(undefined),
             setBounds: jest.fn().mockResolvedValue(undefined),
             dispose: jest.fn().mockResolvedValue(undefined),
-            addListener: jest
-                .fn()
-                .mockResolvedValue({ remove: jest.fn() }),
+            addListener: jest.fn().mockResolvedValue({ remove: jest.fn() }),
         } as unknown as jest.Mocked<AndroidNativePlayerPlugin>;
 
         Object.defineProperty(globalThis, 'ResizeObserver', {
@@ -109,6 +107,23 @@ describe('AndroidNativePlayerComponent punch-through', () => {
 
         expect(
             document.documentElement.hasAttribute(FULLSCREEN_ATTRIBUTE)
+        ).toBe(false);
+    });
+
+    it('leaves seekable catch-up inline so Return to live stays reachable', () => {
+        fixture.componentInstance.playback = {
+            streamUrl: 'https://example.test/timeshift/1.ts',
+            title: 'Example Channel - Archived Show',
+            isLive: false,
+            presentation: 'inline',
+        };
+        fixture.detectChanges();
+
+        expect(
+            document.documentElement.hasAttribute(FULLSCREEN_ATTRIBUTE)
+        ).toBe(false);
+        expect(
+            document.documentElement.hasAttribute(FULLSCREEN_LOCKED_ATTRIBUTE)
         ).toBe(false);
     });
 

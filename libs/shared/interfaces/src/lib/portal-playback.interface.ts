@@ -13,6 +13,11 @@ export interface ResolvedPortalPlayback {
     title: string;
     thumbnail?: string | null;
     isLive?: boolean;
+    /**
+     * Optional host-layout hint. Catch-up is seekable (`isLive=false`) but
+     * still belongs in the Live TV layout beside its EPG.
+     */
+    presentation?: 'inline' | 'fullscreen';
     startTime?: number;
     contentInfo?: PlayerContentInfo;
     headers?: Record<string, string>;

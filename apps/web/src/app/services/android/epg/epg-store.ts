@@ -34,7 +34,13 @@ import { XmltvStreamParser } from './xmltv-parser';
  */
 
 /** Programmes older than this are dropped; they only slow every later scan. */
-const RETENTION_HOURS = 24;
+export const CATCHUP_HISTORY_HOURS = 24;
+const RETENTION_HOURS = CATCHUP_HISTORY_HOURS;
+
+/** Lower bound shared by EPG retrieval and retention: one day of replay. */
+export function catchupHistoryStartIso(nowMs = Date.now()): string {
+    return new Date(nowMs - CATCHUP_HISTORY_HOURS * 3600_000).toISOString();
+}
 
 type ProgressListener = (progress: ElectronBridgeEpgProgress) => void;
 
@@ -234,7 +240,7 @@ export class EpgStore {
 
     async channelPrograms(channelId: string, limit = 200): Promise<EpgProgram[]> {
         const rows = await this.db.query(
-            channelProgramsQuery(channelId, new Date().toISOString(), limit)
+            channelProgramsQuery(channelId, catchupHistoryStartIso(), limit)
         );
         return rows.map(toEpgProgram);
     }

@@ -67,7 +67,13 @@ export function isTextEntry(element: Element): boolean {
     }
 
     const type = (element as HTMLInputElement).type;
-    return type !== 'button' && type !== 'submit' && type !== 'checkbox' && type !== 'radio';
+    return (
+        type !== 'button' &&
+        type !== 'submit' &&
+        type !== 'checkbox' &&
+        type !== 'radio' &&
+        type !== 'range'
+    );
 }
 
 function isDisabled(element: Element): boolean {

@@ -1424,6 +1424,34 @@ simply refusing to ask, because the UI gates the whole path behind
 `supportsEpg`. Programme titles, times and live progress bars now render in the
 channel list. Manual channel mappings are real and persist in `localStorage`.
 
+**Xtream catch-up (done).** A channel is replay-capable only when the portal
+returns both `tv_archive=1` and a positive `tv_archive_duration`. Those channels
+carry a non-focusable `Catchup` badge in the channel sidebar, so the marker does
+not add a D-pad stop. Select the channel, move into its EPG timeline/list and
+activate a past programme; the resulting playback has `isLive=false` and uses
+the native ExoPlayer path. It also carries `presentation: 'inline'`: seekability
+must not make the native host treat replay like a film and lock it fullscreen,
+because that hides the EPG and its `Return to live` action. The current
+programme can also be restarted, and `Return to live` restores the direct
+stream.
+
+On 2026-08-03 this was verified against the user's real portal on the reference
+Mi Box: HTTP `HEAD` probes were refused for all four URL shapes, but the Android
+REST `.ts` timeshift URL reached ExoPlayer's `playing` state with a known
+duration. Do not treat a rejected `HEAD` as proof that catch-up is unavailable.
+The shared seek slider stays virtually focused on Android TV because real focus
+on `<input type="range">` raises the Mi Box soft keyboard even though the
+control cannot accept text. OK enters an explicit adjustment mode, LEFT/RIGHT
+adjust and commit the position, and holding either direction progressively
+accelerates the adjustment (normal, 2x, 5x, 10x then 30x steps). Repeats are
+ignored outside an active slider, and BACK exits that mode and restores the
+previous player control without navigating away.
+A quick double OK on an archive programme keeps the first activation inline,
+then switches its catch-up playback to fullscreen as soon as its player exists.
+The Android XMLTV lookup returns programmes whose end falls in the preceding
+24 hours, matching the local retention window, so the previous day’s replay
+programmes remain selectable when the provider exposes catch-up for the channel.
+
 **Stage 2 (done): XMLTV import and storage**, in `services/android/epg/`.
 SQLite in the WebView via `@capacitor-community/sqlite`, chosen by measurement
 (`git show archive/androidtv-main-abandoned:docs/android-port/epg-storage-load-test.md`:
@@ -1468,10 +1496,6 @@ and need the same treatment.
 
 ## Open Questions
 
-- **EPG is Electron-only and unported.** Every `supportsEpg*` capability probes a
-  `window.electron` method. The storage route was already settled by measurement
-  on `archive/androidtv-main-abandoned` (SQLite in the WebView) — read that load
-  test before re-deciding.
 - **Catalogue payload headroom is unmeasured.** The bridge can hold several
   copies of a large `get_vod_streams` body on a ~1 GB budget.
 - **Stalker transport** was never implemented in the first attempt (it rejected

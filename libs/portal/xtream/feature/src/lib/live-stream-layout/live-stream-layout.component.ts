@@ -62,10 +62,7 @@ import {
     WebPlayerViewComponent,
 } from '@iptvnator/ui/playback';
 import { LiveEpgPanelSummary } from '@iptvnator/ui/shared-portals';
-import {
-    EpgItem,
-    EpgProgram,
-} from '@iptvnator/shared/interfaces';
+import { EpgItem, EpgProgram } from '@iptvnator/shared/interfaces';
 import { PortalChannelsListComponent } from '../portal-channels-list/portal-channels-list.component';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { RuntimeCapabilitiesService, SettingsStore } from '@iptvnator/services';
@@ -453,7 +450,9 @@ export class LiveStreamLayoutComponent implements OnInit, OnDestroy {
         // sync with the category rail. For already-selected channels this is a
         // store no-op.
         this.selectLiveItemCategory(item);
-        this.livePlaybackMemory.remember(this.xtreamStore.currentPlaylist()?.id);
+        this.livePlaybackMemory.remember(
+            this.xtreamStore.currentPlaylist()?.id
+        );
         this.activePlayback.set({
             streamUrl,
             title: item.title ?? item.name ?? '',
@@ -667,12 +666,15 @@ export class LiveStreamLayoutComponent implements OnInit, OnDestroy {
         );
 
         this.activeCatchupProgram.set(program);
-        this.livePlaybackMemory.remember(this.xtreamStore.currentPlaylist()?.id);
+        this.livePlaybackMemory.remember(
+            this.xtreamStore.currentPlaylist()?.id
+        );
         this.activePlayback.set({
             streamUrl: catchupUrl,
             title: this.getCatchupPlaybackTitle(item, program),
             thumbnail: item.poster_url ?? item.stream_icon ?? null,
             isLive: false,
+            presentation: 'inline',
         });
         if (this.usesEmbeddedPlayer()) {
             return;

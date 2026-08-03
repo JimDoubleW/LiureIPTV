@@ -41,6 +41,7 @@
             [class.is-playing]="isPlaying(item)"
             [class.is-selected]="isSelected(item)"
             [class.is-short]="item.block.durationMin < 10"
+            [attr.data-tv-catchup-target]="item.canCatchUp ? '' : null"
             [style.left.px]="item.leftPx"
             [style.width.px]="item.widthPx"
             (click)="blockClick.emit(item.block)"

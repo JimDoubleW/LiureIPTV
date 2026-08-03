@@ -44,6 +44,7 @@ describe('spatial candidates', () => {
         it.each([
             ['<input type="checkbox" />'],
             ['<input type="radio" />'],
+            ['<input type="range" />'],
             ['<input type="button" />'],
             ['<input type="submit" />'],
             ['<button></button>'],

@@ -27,6 +27,7 @@ import { EpgListRow } from '../epg-list-view.utils';
         role: 'button',
         tabindex: '0',
         '[attr.data-when]': 'row().when',
+        '[attr.data-tv-catchup-target]': 'row().canCatchUp ? \'\' : null',
         '[class.sel]': 'selected()',
         '[class.playing]': 'isPlaying()',
         '(click)': 'onRowClick()',

@@ -57,11 +57,18 @@ export interface XtreamChannelListItem {
     readonly type?: 'live' | 'movie' | 'series' | 'vod';
     readonly xtream_id: number;
     readonly epg_channel_id?: string | null;
+    readonly tv_archive?: number | null;
+    readonly tv_archive_duration?: number | null;
 }
 
 interface XtreamCategoryLike {
     readonly category_id?: string | number;
     readonly id?: string | number;
+}
+
+interface XtreamArchiveMetadata {
+    readonly tv_archive?: number | string | null;
+    readonly tv_archive_duration?: number | string | null;
 }
 
 @Component({
@@ -198,6 +205,13 @@ export class PortalChannelsListComponent implements AfterViewInit, OnDestroy {
 
     trackBy(_index: number, item: XtreamChannelListItem | XtreamItem) {
         return item.xtream_id;
+    }
+
+    hasArchivePlayback(item: XtreamArchiveMetadata): boolean {
+        return (
+            Number(item.tv_archive ?? 0) === 1 &&
+            Number(item.tv_archive_duration ?? 0) > 0
+        );
     }
 
     ngOnInit(): void {
@@ -550,7 +564,10 @@ export class PortalChannelsListComponent implements AfterViewInit, OnDestroy {
 
     // ── Context menu ────────────────────────────────────────────
 
-    onChannelContextMenu(channel: XtreamChannelListItem, event: MouseEvent): void {
+    onChannelContextMenu(
+        channel: XtreamChannelListItem,
+        event: MouseEvent
+    ): void {
         this.contextMenuChannel.set(channel);
         this.contextMenuPosition.set({
             x: `${event.clientX}px`,

@@ -2,6 +2,7 @@ import {
     armPlayerControlsIdleHide,
     enterFullscreen,
     exitFullscreen,
+    handleCatchupProgrammeOk,
     handleFullscreenDirection,
     isActiveChannelRow,
     isInsidePlayer,
@@ -28,6 +29,21 @@ describe('player keys', () => {
     });
 
     describe('layout fullscreen', () => {
+        it('enters fullscreen on a quick double OK over a catch-up programme', () => {
+            document.body.innerHTML =
+                '<app-web-player-view data-tv-catchup-playing>' +
+                '<app-android-native-player></app-android-native-player>' +
+                '</app-web-player-view>' +
+                '<div id="programme" data-tv-catchup-target></div>';
+            const programme = document.getElementById('programme');
+
+            expect(handleCatchupProgrammeOk(programme)).toBe(false);
+            expect(handleCatchupProgrammeOk(programme)).toBe(true);
+            expect(
+                document.documentElement.hasAttribute(TV_FULLSCREEN_ATTRIBUTE)
+            ).toBe(true);
+        });
+
         it('refuses to go fullscreen with nothing playing', () => {
             // An empty black overlay would look like a crash.
             expect(enterFullscreen()).toBe(false);

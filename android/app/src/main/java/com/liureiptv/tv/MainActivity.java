@@ -53,11 +53,16 @@ public class MainActivity extends BridgeActivity {
             return super.dispatchKeyEvent(event);
         }
 
-        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+        // Only a selected range input consumes repeated LEFT/RIGHT in the web
+        // layer. Repeating other keys would make ordinary focus traversal race
+        // through the UI, so their first DOWN remains the sole dispatched one.
+        if (event.getAction() == KeyEvent.ACTION_DOWN
+                && (event.getRepeatCount() == 0 || isHorizontalDpadKey(key))) {
             WebView webView = getBridge().getWebView();
             if (webView != null) {
                 webView.evaluateJavascript(
-                        "window.__tvKeyDispatch && window.__tvKeyDispatch('" + key + "')",
+                        "window.__tvKeyDispatch && window.__tvKeyDispatch('" + key
+                                + "', " + event.getRepeatCount() + ")",
                         null);
             }
         }
@@ -65,6 +70,10 @@ public class MainActivity extends BridgeActivity {
         // Consume DOWN and UP alike: returning false for either would let the
         // WebView run its native focus search after all.
         return true;
+    }
+
+    private static boolean isHorizontalDpadKey(String key) {
+        return "left".equals(key) || "right".equals(key);
     }
 
     private static String tvKeyName(int keyCode) {

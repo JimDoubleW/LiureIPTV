@@ -99,6 +99,9 @@
                     [streamUrl]="streamUrl"
                     [title]="activePlayback()?.title ?? ''"
                     [playback]="activePlayback()"
+                    [attr.data-tv-catchup-playing]="
+                        activeCatchupProgram() ? '' : null
+                    "
                     (externalFallbackRequested)="
                         handleExternalFallbackRequest($event)
                     "

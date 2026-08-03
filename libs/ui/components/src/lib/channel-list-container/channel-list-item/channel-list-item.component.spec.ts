@@ -91,6 +91,28 @@ describe('ChannelListItemComponent', () => {
         expect(fixture.nativeElement.querySelector('.channel-logo')).toBeNull();
     });
 
+    it('shows a non-interactive catch-up badge for archived channels', () => {
+        fixture.componentRef.setInput('name', 'Replay Channel');
+        fixture.componentRef.setInput('archivePlaybackAvailable', true);
+        fixture.detectChanges();
+
+        const badge = fixture.nativeElement.querySelector('.catchup-badge');
+
+        expect(badge).not.toBeNull();
+        expect(badge.textContent).toContain('CHANNELS.DETAILS_DIALOG.CATCHUP');
+        expect(badge.querySelector('button')).toBeNull();
+        expect(badge.hasAttribute('tabindex')).toBe(false);
+    });
+
+    it('hides the catch-up badge for live-only channels', () => {
+        fixture.componentRef.setInput('name', 'Live-only Channel');
+        fixture.detectChanges();
+
+        expect(
+            fixture.nativeElement.querySelector('.catchup-badge')
+        ).toBeNull();
+    });
+
     it('emits clicked on a single click by default', () => {
         const clicked = jest.fn();
         fixture.componentInstance.clicked.subscribe(clicked);

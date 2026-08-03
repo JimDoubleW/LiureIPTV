@@ -97,7 +97,11 @@ export function currentProgramsQuery(
     };
 }
 
-/** Every programme for one channel, optionally from one day onwards. */
+/**
+ * Every programme for one channel from the requested history boundary onward.
+ * Android supplies a 24-hour boundary so finished catch-up programmes remain
+ * selectable alongside the current and upcoming schedule.
+ */
 export function channelProgramsQuery(
     channelId: string,
     fromIso: string,

@@ -791,6 +791,7 @@ describe('LiveStreamLayoutComponent', () => {
             expect.objectContaining({
                 streamUrl: 'https://example.com/timeshift.ts',
                 isLive: false,
+                presentation: 'inline',
             })
         );
     });
@@ -894,7 +895,9 @@ describe('LiveStreamLayoutComponent', () => {
                 isLive: true,
             })
         );
-        expect(timeline.componentInstance.summary()?.title).toBe('Current Show');
+        expect(timeline.componentInstance.summary()?.title).toBe(
+            'Current Show'
+        );
         expect(timeline.componentInstance.summaryLabelKey()).toBe(
             'EPG.CURRENT_PROGRAM'
         );
@@ -1067,7 +1070,9 @@ describe('LiveStreamLayoutComponent', () => {
         const timeline = fixture.debugElement.query(
             By.directive(StubEpgTimelineComponent)
         );
-        expect(timeline.componentInstance.archivePlaybackAvailable()).toBe(true);
+        expect(timeline.componentInstance.archivePlaybackAvailable()).toBe(
+            true
+        );
     });
 
     it('shows the floating restore button when the sidebar is collapsed even without a selected category', () => {

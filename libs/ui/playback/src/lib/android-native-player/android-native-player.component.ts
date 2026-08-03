@@ -98,14 +98,15 @@ export class AndroidNativePlayerComponent {
             const root = document.documentElement;
             root.classList.add(NATIVE_VIDEO_PUNCH_THROUGH_CLASS);
 
-            // Live plays inline next to its channel list, whose panels carry
-            // their own backgrounds. Movies and series play inside the detail
-            // page's theater stage, which stacks four opaque layers over the
-            // player's rect — nothing composited behind the WebView can show
-            // through it — so those go straight to the locked fullscreen
-            // layout, where the shell is blanked and nothing paints over the
-            // video. See TV_FULLSCREEN_LOCKED_ATTRIBUTE.
-            const lockFullscreen = !isLivePlayback(playback);
+            // Live and catch-up play inline next to their channel list/EPG.
+            // Catch-up is seekable (`isLive=false`) but explicitly requests
+            // the inline presentation so Return to live remains reachable.
+            // Movies and series play inside an opaque detail-page theater and
+            // therefore default to the locked fullscreen layout.
+            const lockFullscreen =
+                playback.presentation === 'fullscreen' ||
+                (playback.presentation !== 'inline' &&
+                    !isLivePlayback(playback));
             if (lockFullscreen) {
                 root.setAttribute(TV_FULLSCREEN_ATTRIBUTE, '');
                 root.setAttribute(TV_FULLSCREEN_LOCKED_ATTRIBUTE, '');
@@ -142,10 +143,7 @@ export class AndroidNativePlayerComponent {
             duration: snapshot.durationSeconds ?? 0,
         });
 
-        if (
-            snapshot.status === 'ended' &&
-            this.lastEmittedStatus !== 'ended'
-        ) {
+        if (snapshot.status === 'ended' && this.lastEmittedStatus !== 'ended') {
             this.playbackEnded.emit();
         }
         this.lastEmittedStatus = snapshot.status;

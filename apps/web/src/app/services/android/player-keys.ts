@@ -34,6 +34,15 @@ export { TV_FULLSCREEN_ATTRIBUTE, TV_FULLSCREEN_LOCKED_ATTRIBUTE };
 const PLAYER_VIEW_SELECTOR = 'app-web-player-view';
 const CHANNEL_ROW_SELECTOR = '.channel-list-item';
 const ACTIVE_ROW_CLASS = 'active';
+const CATCHUP_TARGET_SELECTOR = '[data-tv-catchup-target]';
+const CATCHUP_PLAYER_SELECTOR =
+    `${PLAYER_VIEW_SELECTOR}[data-tv-catchup-playing]`;
+const DOUBLE_OK_WINDOW_MS = 650;
+const CATCHUP_FULLSCREEN_WAIT_MS = 5000;
+
+let lastCatchupTarget: Element | null = null;
+let lastCatchupOkAt = 0;
+let cancelPendingCatchupFullscreen: (() => void) | null = null;
 
 /**
  * "Is something actually playing to enlarge?" — asked of the DOM, so it has
@@ -59,6 +68,65 @@ export function isActiveChannelRow(element: Element): boolean {
 
 export function isTvFullscreen(): boolean {
     return document.documentElement.hasAttribute(TV_FULLSCREEN_ATTRIBUTE);
+}
+
+/**
+ * Consumes the second quick OK on a replay programme and enters fullscreen.
+ * The archive URL may still be resolving, so wait for its marked player rather
+ * than briefly enlarging the live programme that is being replaced.
+ */
+export function handleCatchupProgrammeOk(element: Element | null): boolean {
+    const target = element?.closest(CATCHUP_TARGET_SELECTOR);
+    if (!target || isTvFullscreen()) {
+        lastCatchupTarget = null;
+        return false;
+    }
+
+    const now = Date.now();
+    const isDoubleOk =
+        target === lastCatchupTarget && now - lastCatchupOkAt <= DOUBLE_OK_WINDOW_MS;
+    lastCatchupTarget = target;
+    lastCatchupOkAt = now;
+    if (!isDoubleOk) {
+        return false;
+    }
+
+    lastCatchupTarget = null;
+    waitForCatchupFullscreen();
+    return true;
+}
+
+function waitForCatchupFullscreen(): void {
+    cancelPendingCatchupFullscreen?.();
+    if (enterFullscreenForCatchup()) {
+        return;
+    }
+
+    const observer = new MutationObserver(() => {
+        if (enterFullscreenForCatchup()) {
+            cancelPendingCatchupFullscreen?.();
+        }
+    });
+    let timeout: number | null = null;
+    const cancel = () => {
+        observer.disconnect();
+        if (timeout !== null) {
+            window.clearTimeout(timeout);
+        }
+        if (cancelPendingCatchupFullscreen === cancel) {
+            cancelPendingCatchupFullscreen = null;
+        }
+    };
+    cancelPendingCatchupFullscreen = cancel;
+    observer.observe(document.body, { childList: true, subtree: true });
+    timeout = window.setTimeout(cancel, CATCHUP_FULLSCREEN_WAIT_MS);
+}
+
+function enterFullscreenForCatchup(): boolean {
+    return (
+        document.querySelector(CATCHUP_PLAYER_SELECTOR) !== null &&
+        enterFullscreen()
+    );
 }
 
 /**
@@ -159,6 +227,7 @@ export function isTvFullscreenLocked(): boolean {
  * {@link TV_FULLSCREEN_LOCKED_ATTRIBUTE}.
  */
 export function exitFullscreen(): boolean {
+    cancelPendingCatchupFullscreen?.();
     if (!isTvFullscreen() || isTvFullscreenLocked()) {
         return false;
     }

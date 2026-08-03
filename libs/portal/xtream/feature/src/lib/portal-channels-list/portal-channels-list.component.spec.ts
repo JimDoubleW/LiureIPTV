@@ -189,6 +189,35 @@ describe('PortalChannelsListComponent', () => {
         ).not.toBeNull();
     });
 
+    it('recognizes only channels with an enabled, non-empty catch-up window', () => {
+        const component = fixture.componentInstance;
+
+        expect(
+            component.hasArchivePlayback({
+                title: 'Replay Channel',
+                xtream_id: 50,
+                tv_archive: '1',
+                tv_archive_duration: '3',
+            })
+        ).toBe(true);
+        expect(
+            component.hasArchivePlayback({
+                title: 'Disabled Archive',
+                xtream_id: 51,
+                tv_archive: 0,
+                tv_archive_duration: 3,
+            })
+        ).toBe(false);
+        expect(
+            component.hasArchivePlayback({
+                title: 'Empty Archive',
+                xtream_id: 52,
+                tv_archive: 1,
+                tv_archive_duration: 0,
+            })
+        ).toBe(false);
+    });
+
     it('selects the current preview program by timestamps, preserves them, and updates progress from them', () => {
         jest.useFakeTimers();
         const currentStartTimestamp = Math.floor(

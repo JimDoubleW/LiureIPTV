@@ -26,6 +26,7 @@ import {
     enterFullscreen,
     exitFullscreen,
     handleFullscreenDirection,
+    handleCatchupProgrammeOk,
     isActiveChannelRow,
     isInsidePlayer,
     focusPlayerControls,
@@ -36,6 +37,7 @@ import {
 import { scrollToReveal } from './scroll-reach';
 import { findBestCandidate, type TvDirection } from './spatial-geometry';
 import { installTvFocusStyles } from './tv-focus.styles';
+import * as tvRange from './tv-range-control';
 
 /**
  * D-pad navigation for the Android TV port.
@@ -114,8 +116,10 @@ function dispatchRealKey(key: string, target: EventTarget): void {
  * while the dropdown sat there unresponsive.
  *
  * `select`/`[role="slider"]` are the same kind of case for a plain native
- * `<select>` or a slider: both drive their own value via real keydown handling
- * that this engine would otherwise short-circuit.
+ * `<select>` or an ARIA slider: both drive their own value via real keydown
+ * handling that this engine would otherwise short-circuit. Native range inputs
+ * are handled separately without real focus; the reference device otherwise
+ * opens its soft keyboard for them.
  *
  * Deliberately **not** included here: a bare `[role="menu"]` ancestor. A
  * `mat-menu` panel always carries that role on its own container regardless
@@ -201,7 +205,7 @@ function applyFocus(element: HTMLElement): void {
     // Arriving on a text field must not raise the keyboard — only OK does.
     // Real focus would open the IME immediately, so the field is marked instead
     // and DOM focus stays on the body, which keeps the D-pad alive.
-    if (isTextEntry(element)) {
+    if (tvRange.prepareVirtualFocus(element, currentElement()) || isTextEntry(element)) {
         setVirtualFocus(element);
     } else {
         clearVirtualFocus();
@@ -475,6 +479,8 @@ function activate(): boolean {
         return promoteVirtualFocus();
     }
 
+    if (handleCatchupProgrammeOk(active)) return true;
+
     // The benchmark's two-step OK: the first press on a channel tunes it and
     // the list survives; the second — the row is now the active one — commits
     // to fullscreen. OK on the player itself commits the same way.
@@ -512,6 +518,12 @@ function onKeyDown(event: KeyboardEvent): void {
     // been swallowed by this very listener's capture-phase run before ever
     // reaching the trigger's own binding.
     const active = currentElement();
+    const mapped = event.key === 'Enter' ? 'ok' : DIRECTION_BY_KEY[event.key];
+    if (mapped && tvRange.handleTvRangeKey(active, mapped)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+    }
     if (isNativeControlOpen(active)) {
         return;
     }
@@ -570,11 +582,8 @@ const NATIVE_KEYS: Readonly<Record<string, TvDirection | 'ok' | 'back'>> = {
  *    app from any list.
  */
 function goBack(): void {
-    // Fullscreen first: walking history underneath fullscreen video would
-    // leave the page while the user only meant to shrink the picture.
-    if (exitFullscreen()) {
-        return;
-    }
+    // Slider adjustment and fullscreen both consume BACK before route history.
+    if (tvRange.releaseFocus(currentElement()) || exitFullscreen()) return;
 
     // Same lesson as isNativeControlOpen: this app's overlays are not
     // appended under a global `.cdk-overlay-container`, so requiring that
@@ -613,11 +622,9 @@ function goBack(): void {
  * and forwards each press here. Once the native layer is in place, this is the
  * only way D-pad input reaches the app.
  */
-function dispatchFromNative(key: string): void {
+function dispatchFromNative(key: string, repeatCount = 0): void {
     const mapped = NATIVE_KEYS[key];
-    if (!mapped) {
-        return;
-    }
+    if (!mapped) return;
 
     if (mapped === 'back') {
         goBack();
@@ -628,20 +635,25 @@ function dispatchFromNative(key: string): void {
     // pins the bar open. Re-arming here rather than at each call site means
     // the timer measures how long the remote has been quiet.
     try {
-        handleNavigationKey(mapped);
+        handleNavigationKey(mapped, repeatCount);
     } finally {
         armPlayerControlsIdleHide();
     }
 }
 
-function handleNavigationKey(mapped: TvDirection | 'ok'): void {
+function handleNavigationKey(mapped: TvDirection | 'ok', repeatCount = 0): void {
+    const active = currentElement();
+    if (tvRange.handleTvRangeKey(active, mapped, repeatCount)) return;
+    // Ignore repeats outside an active range so a held D-pad cannot race UI.
+    if (repeatCount > 0) return;
+
     // A native/Material control (an open mat-select, a slider, a plain
     // <select>) must keep driving its own arrow/Enter handling — see
     // isNativeControlOpen's doc comment for the mat-select case this was
     // written for. Handing it a real KeyboardEvent is what makes that
     // handling run at all, now that the native key layer means this
     // function is the only thing that ever sees these presses.
-    if (isNativeControlOpen(currentElement())) {
+    if (isNativeControlOpen(active)) {
         const target = document.activeElement ?? document.body;
         dispatchRealKey(mapped === 'ok' ? 'Enter' : KEY_BY_DIRECTION[mapped], target);
         return;
@@ -669,8 +681,11 @@ export function armTvNavigation(): void {
 
     installTvFocusStyles();
 
-    (window as Window & { __tvKeyDispatch?: (key: string) => void }).__tvKeyDispatch =
-        dispatchFromNative;
+    (
+        window as Window & {
+            __tvKeyDispatch?: (key: string, repeatCount?: number) => void;
+        }
+    ).__tvKeyDispatch = dispatchFromNative;
 
     // Kept as a fallback for an APK whose native layer predates the dispatch
     // hook. When the native layer is present these keys are consumed before
