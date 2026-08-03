@@ -66,6 +66,8 @@ export interface AndroidNativePlayerPlugin {
     setBounds(options: AndroidNativePlayerBoundsOptions): Promise<void>;
     setAudioTrack(options: AndroidNativePlayerAudioTrackOptions): Promise<void>;
     dispose(options: AndroidNativePlayerIdOptions): Promise<void>;
+    /** Stop and release whichever native session is currently active. */
+    stop?(): Promise<void>;
     addListener(
         eventName: 'nativePlayerStatus',
         listenerFunc: (snapshot: AndroidNativePlayerSnapshot) => void

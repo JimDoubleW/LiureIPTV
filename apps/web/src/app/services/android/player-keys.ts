@@ -7,9 +7,9 @@ import type { TvDirection } from './spatial-geometry';
 /**
  * The playback side of the reference-player key contract.
  *
- * The benchmark's OK is a two-step gesture: the first press on a channel tunes
- * it while the list survives, the second — on the now-playing channel —
- * commits to fullscreen. UP/DOWN over fullscreen video zap to the next and
+ * The Android TV OK gesture tunes a channel and the navigation layer folds its
+ * list; a second OK on the player can then commit to fullscreen. UP/DOWN over
+ * fullscreen video zap to the next and
  * previous channel with no surface open at all, and LEFT reveals the channel
  * list (here: leaves fullscreen, which is the closest structural equivalent).
  * See docs/android-port/tv-navigation-reference.md.
@@ -21,7 +21,8 @@ import type { TvDirection } from './spatial-geometry';
  * document element plus a fixed-inset style needs no gesture and stays fully
  * under this engine's control.
  *
- * Everything works off one DOM contract the app already maintains:
+ * LEFT/RIGHT remain inside the fullscreen surface; BACK exits it. Everything
+ * else works off one DOM contract the app already maintains:
  * `.channel-list-item` rows with `active` marking the tuned channel. No
  * component is modified.
  */
@@ -300,14 +301,7 @@ export function handleFullscreenDirection(direction: TvDirection): boolean {
         return true;
     }
 
-    if (direction === 'left') {
-        // The benchmark's LEFT reveals the channel list over the video; the
-        // closest structural equivalent is returning to the list layout. When
-        // fullscreen is locked there is no list to return to — the key is
-        // still swallowed so the WebView cannot act on it.
-        exitFullscreen();
-        return true;
-    }
-
+    // LEFT/RIGHT never leave the current panel. BACK is the explicit gesture
+    // that exits fullscreen and reveals the channel list.
     return true;
 }

@@ -1090,6 +1090,17 @@ No formal migration system yet. Schema changes are applied via raw SQL in the `c
 This fork carries an Android TV port on the `androidtv/main` branch. Its branch
 model, conflict-surface rules, target hardware and open decisions live in
 [`CLAUDE.android.md`](./CLAUDE.android.md) — read it before touching port code.
+The supported developer entry point is `tools/android/build-android.sh`:
+`-b/--build` rebuilds the PWA bundle, syncs Capacitor and assembles the debug
+APK; `-i`, `-l`, `-s` and `-a <address>` install, launch, capture a screenshot
+and select/connect an ADB target without forcing a rebuild. Android development
+versions derive `versionCode` from the Git commit count and use
+`<package-version>-dev.<count>.<sha>` unless explicitly overridden.
+TV navigation is hierarchical: LEFT/RIGHT stay inside the current panel, OK
+confirms a category or channel, and BACK reveals Channels, then Live
+Categories, then the tray. OK on a channel starts playback and folds Channels;
+BACK restores it at the previous channel. A consecutive double BACK in the tray
+stops/releases ExoPlayer before closing the Android activity.
 Android downloads reuse the shared downloads UI through a partial bridge backed
 by the OS `DownloadManager` and WebView SQLite. Android's document-tree picker
 selects a persistent destination; TV firmware without a real picker gets a

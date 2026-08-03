@@ -96,6 +96,33 @@ describe('native key dispatch and range inputs', () => {
         expect(showKeyboard).not.toHaveBeenCalled();
     });
 
+    it('keeps a player control focused while the slider is virtually focused', () => {
+        document.body.innerHTML = `
+            <app-web-player-view>
+                <app-player-controls>
+                    <button id="player-before" type="button">Pause</button>
+                    <input id="player-timeline" type="range" min="0" max="100" value="5" />
+                </app-player-controls>
+            </app-web-player-view>
+        `;
+
+        const before = document.getElementById(
+            'player-before'
+        ) as HTMLButtonElement;
+        const timeline = document.getElementById(
+            'player-timeline'
+        ) as HTMLInputElement;
+        withRect(before, { top: 0, bottom: 40, left: 0, right: 40 });
+        withRect(timeline, { top: 0, bottom: 40, left: 80, right: 280 });
+
+        before.focus();
+        dispatch('right');
+
+        expect(getVirtualFocus()).toBe(timeline);
+        expect(document.activeElement).toBe(before);
+        expect(document.activeElement).not.toBe(timeline);
+    });
+
     it('adjusts only after OK and accelerates a held LEFT/RIGHT press', () => {
         const before = document.getElementById('before') as HTMLButtonElement;
         const timeline = document.getElementById(

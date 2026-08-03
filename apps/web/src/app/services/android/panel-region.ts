@@ -122,8 +122,8 @@ export function isRegionCrossingAllowed(
  * A category row in the context column (Live, Movies and Series all render
  * their categories through the same `button.category-item`).
  *
- * These follow focus instead of waiting for OK: the column is a master list
- * whose detail pane should track it, as on the benchmark. Scoped tightly on
+ * These are explicit OK targets: moving focus across the category list must
+ * not reload a potentially large channel collection. Scoped tightly on
  * purpose — the panel header holds search/sort/refine buttons, and the rail
  * holds section links, where activating on focus would fire searches and
  * navigations merely because the focus passed by.
@@ -211,4 +211,32 @@ export function expandContext(): HTMLElement | null {
     // Force layout so the caller measures the expanded panel, not the old one.
     panel.getBoundingClientRect();
     return panel;
+}
+
+/**
+ * Explicitly folds the live/VOD/series category column after the viewer
+ * confirms a category. Unlike `applyRegion`, this is an action: focus may
+ * still be on the category button, so the panel is made inert immediately
+ * and the caller moves focus into the content list afterwards.
+ */
+export function collapseContext(): HTMLElement | null {
+    const panel = getContextPanel();
+    if (!panel) {
+        return null;
+    }
+
+    document.documentElement.setAttribute(REGION_ATTRIBUTE, 'content');
+    panel.setAttribute('inert', '');
+    return panel;
+}
+
+/** Whether the live category column is currently folded. */
+export function isContextCollapsed(): boolean {
+    const panel = getContextPanel();
+    return (
+        panel !== null &&
+        (panel.hasAttribute('inert') ||
+            document.documentElement.getAttribute(REGION_ATTRIBUTE) ===
+                'content')
+    );
 }

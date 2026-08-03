@@ -1,4 +1,46 @@
+import groovy.json.JsonSlurper
+import java.io.ByteArrayOutputStream
+
 apply plugin: 'com.android.application'
+
+def repoRootDir = rootProject.projectDir.parentFile
+def packageJson = new JsonSlurper().parse(new File(repoRootDir, 'package.json'))
+def appVersion = packageJson.version.toString()
+
+// Local and dev builds get a deterministic Git-based suffix so Android
+// upgrades always move forward, while tagged clean releases keep the plain
+// semantic version.
+def gitCommand = { List<String> args, String fallback ->
+    def stdout = new ByteArrayOutputStream()
+    try {
+        exec {
+            commandLine(['git'] + args)
+            workingDir repoRootDir
+            standardOutput = stdout
+            errorOutput = new ByteArrayOutputStream()
+            ignoreExitValue = true
+        }
+        def output = stdout.toString('UTF-8').trim()
+        output ? output : fallback
+    } catch (Exception ignored) {
+        fallback
+    }
+}
+
+def envVersionCode = System.getenv('ANDROID_VERSION_CODE')?.trim()
+def envVersionName = System.getenv('ANDROID_VERSION_NAME')?.trim()
+def gitCommitCount = gitCommand(['rev-list', '--count', 'HEAD'], '1')
+def gitShortSha = gitCommand(['rev-parse', '--short=7', 'HEAD'], 'unknown')
+def gitTags = gitCommand(['tag', '--points-at', 'HEAD'], '').readLines()
+def gitStatus = gitCommand(['status', '--porcelain'], '')
+def taggedRelease = gitStatus.isEmpty() && (
+        gitTags.contains(appVersion) || gitTags.contains("v${appVersion}")
+)
+
+def computedVersionCode = (envVersionCode ?: gitCommitCount).toInteger()
+def computedVersionName = envVersionName ?: (
+        taggedRelease ? appVersion : "${appVersion}-dev.${gitCommitCount}.${gitShortSha}"
+)
 
 android {
     namespace = "com.liureiptv.tv"
@@ -7,8 +49,8 @@ android {
         applicationId "com.liureiptv.tv"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode computedVersionCode
+        versionName computedVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

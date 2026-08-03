@@ -268,6 +268,19 @@ public class AndroidNativePlayerPlugin extends Plugin {
         });
     }
 
+    /**
+     * Stops the active session without requiring its id. The TV shell uses
+     * this immediately before Capacitor's App.exitApp() so ExoPlayer is
+     * silenced and released before the Activity finishes.
+     */
+    @PluginMethod
+    public void stop(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            disposeInternal();
+            call.resolve();
+        });
+    }
+
     @Override
     protected void handleOnDestroy() {
         getActivity().runOnUiThread(this::disposeInternal);

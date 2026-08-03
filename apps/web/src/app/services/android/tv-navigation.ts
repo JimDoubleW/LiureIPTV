@@ -7,10 +7,8 @@ import {
 import { resolveZone, ZoneMemory } from './focus-zones';
 import {
     applyRegion,
-    expandContext,
-    getContextPanel,
-    getLastContextFocus,
-    isAlreadySelectedCategory,
+    collapseContext,
+    isContextCollapsed,
     isContextCategoryItem,
     isRegionCrossingAllowed,
     noteContextFocus,
@@ -38,6 +36,13 @@ import { scrollToReveal } from './scroll-reach';
 import { findBestCandidate, type TvDirection } from './spatial-geometry';
 import { installTvFocusStyles } from './tv-focus.styles';
 import * as tvRange from './tv-range-control';
+import { handleTrayBack, resetTrayBackSequence } from './tv-app-exit';
+import {
+    dispatchRealKey,
+    findUnmanagedOverlay,
+    isNativeControlOpen,
+} from './tv-native-control-keys';
+import { TvPanelNavigation } from './tv-panel-navigation';
 
 /**
  * D-pad navigation for the Android TV port.
@@ -64,124 +69,6 @@ const KEY_BY_DIRECTION: Readonly<Record<TvDirection, string>> = {
     right: 'ArrowRight',
 };
 
-const KEY_CODES: Readonly<Record<string, number>> = {
-    ArrowUp: 38,
-    ArrowDown: 40,
-    ArrowLeft: 37,
-    ArrowRight: 39,
-    Enter: 13,
-    Escape: 27,
-};
-
-/**
- * Dispatches a real `KeyboardEvent`, indistinguishable from a genuine one to
- * any ordinary `(keydown)` listener — only `isTrusted` differs, which matters
- * for browser-gated APIs like fullscreen/autoplay but not for Angular's own
- * event bindings. This is how control is handed back to a native or Material
- * widget that owns its own keyboard handling instead of this engine.
- */
-function dispatchRealKey(key: string, target: EventTarget): void {
-    const event = new KeyboardEvent('keydown', {
-        key,
-        bubbles: true,
-        cancelable: true,
-    });
-
-    // Old-style `keyCode`/`which` are still tested by some libraries — Material
-    // itself, for one, which is why Escape needed this for BACK to close a
-    // dialog. A synthesized KeyboardEvent carries 0 for both unless set here.
-    const keyCode = KEY_CODES[key];
-    if (keyCode !== undefined) {
-        Object.defineProperty(event, 'keyCode', { value: keyCode });
-        Object.defineProperty(event, 'which', { value: keyCode });
-    }
-
-    target.dispatchEvent(event);
-}
-
-/**
- * Whether the focused element currently belongs to a native/Material control
- * that must keep driving its own arrow/Enter handling.
- *
- * The concrete case this exists for: `mat-select`'s open panel uses the ARIA
- * 1.1 "activedescendant" combobox pattern. Real DOM focus never leaves the
- * trigger — `document.activeElement` stays `MAT-SELECT` the whole time — and
- * an `(keydown)` binding on that host element moves `aria-activedescendant`
- * and scrolls the panel. That binding only fires on a genuine keydown event
- * reaching the trigger, which stopped happening once the native key layer
- * began consuming every D-pad press before the WebView ever saw it: confirmed
- * on the reference device, pressing DOWN in the open language list left
- * `aria-activedescendant` untouched and silently moved real focus onto an
- * unrelated "Visual theme" button via this engine's own geometric search,
- * while the dropdown sat there unresponsive.
- *
- * `select`/`[role="slider"]` are the same kind of case for a plain native
- * `<select>` or an ARIA slider: both drive their own value via real keydown
- * handling that this engine would otherwise short-circuit. Native range inputs
- * are handled separately without real focus; the reference device otherwise
- * opens its soft keyboard for them.
- *
- * Deliberately **not** included here: a bare `[role="menu"]` ancestor. A
- * `mat-menu` panel always carries that role on its own container regardless
- * of what is inside it, and confirmed on the reference device, the "Select
- * playlist" menu's Search/Add-playlist buttons carry no ARIA role at all (the
- * panel is a `mat-menu` used purely for positioning, not built from
- * `[mat-menu-item]`). Treating "inside a role=menu container" as reason
- * enough to defer breaks two ways at once for that panel: real focus never
- * moves off the trigger into it in the first place (Angular Material only
- * auto-focuses a panel's first item for a keyboard-*initiated* open, and this
- * engine's OK always synthesizes a mouse-style click), and even after this
- * engine's own geometric search moves focus onto one of its buttons, nothing
- * inside the panel implements its own arrow-key handling to hand off to
- * either — both buttons were completely unreachable. Whether a `role="menu"`
- * container actually has real Material keyboard handling to defer to is
- * decided by `overlayHasNativeKeyboardHandling` below (its own `menuitem`
- * children), not by the role on the container itself. `move()` scopes its
- * own search to a panel with no such children instead — see
- * `findUnmanagedOverlay`.
- */
-function isNativeControlOpen(active: Element | null): boolean {
-    if (active?.closest('[role="slider"], select')) {
-        return true;
-    }
-
-    // No fixed ancestor assumed: confirmed on the reference device that this
-    // app's mat-select renders its panel (`.cdk-overlay-pane`) as a direct
-    // child of the trigger itself (`cdk-overlay-popover`), not appended to a
-    // global `.cdk-overlay-container` the way most Angular CDK docs describe —
-    // a selector requiring that ancestor silently never matched, which is why
-    // the first version of this fix still failed on-device even though it
-    // passed in tests (jsdom fixtures had assumed the same wrong shape). The
-    // element is confirmed removed from the DOM on close, not merely hidden,
-    // so matching it anywhere in the document carries no stale-match risk.
-    const overlay = document.querySelector('.cdk-overlay-pane');
-    return overlay !== null && overlayHasNativeKeyboardHandling(overlay);
-}
-
-/**
- * The open `.cdk-overlay-pane` with no ARIA role (`option`/`menuitem`/
- * `slider`) among its content, or `null` if none is open or the open one owns
- * its own keyboard handling (mat-select's listbox, a real `[mat-menu-item]`
- * menu). `move()` scopes candidate search to this element: the overlay's
- * backdrop does not mark the rest of the page `aria-hidden`, so without a
- * scoped search, background content behind the dropdown would still be a
- * valid, reachable candidate.
- */
-function findUnmanagedOverlay(): HTMLElement | null {
-    const overlay = document.querySelector<HTMLElement>('.cdk-overlay-pane');
-    if (!overlay || overlayHasNativeKeyboardHandling(overlay)) {
-        return null;
-    }
-    return overlay;
-}
-
-function overlayHasNativeKeyboardHandling(overlay: Element): boolean {
-    return (
-        overlay.querySelector('[role="option"], [role="menuitem"], [role="slider"]') !==
-        null
-    );
-}
-
 const memory = new ZoneMemory();
 
 function currentElement(): HTMLElement | null {
@@ -193,7 +80,11 @@ function currentElement(): HTMLElement | null {
     }
 
     const active = document.activeElement;
-    if (!active || active === document.body || !(active instanceof HTMLElement)) {
+    if (
+        !active ||
+        active === document.body ||
+        !(active instanceof HTMLElement)
+    ) {
         return null;
     }
     return active;
@@ -202,11 +93,26 @@ function currentElement(): HTMLElement | null {
 function applyFocus(element: HTMLElement): void {
     ensureFocusable(element);
 
+    const origin = currentElement();
+    const entersVirtualRange = tvRange.prepareVirtualFocus(element, origin);
+
     // Arriving on a text field must not raise the keyboard — only OK does.
     // Real focus would open the IME immediately, so the field is marked instead
     // and DOM focus stays on the body, which keeps the D-pad alive.
-    if (tvRange.prepareVirtualFocus(element, currentElement()) || isTextEntry(element)) {
+    if (entersVirtualRange || isTextEntry(element)) {
         setVirtualFocus(element);
+
+        if (entersVirtualRange) {
+            // Range inputs stay on virtual focus so Android does not open the
+            // soft keyboard. Keep a real focus inside the player controls,
+            // though, because their focusin state is what keeps the bar (and
+            // therefore the slider) visible while the user scrubs.
+            if (origin?.closest('app-player-controls')) {
+                origin.focus({ preventScroll: true });
+            } else {
+                focusPlayerControls();
+            }
+        }
     } else {
         clearVirtualFocus();
         element.focus({ preventScroll: true });
@@ -219,170 +125,27 @@ function applyFocus(element: HTMLElement): void {
     memory.remember(element);
     noteContextFocus(element);
     applyRegion(element);
-    scheduleAutoSelect(element);
 }
 
-/**
- * A wide action card contains controls inside its own rectangle. Pure spatial
- * scoring correctly rejects those controls as being "behind" the card's right
- * edge, which made Download Copy/Delete buttons unreachable from the focused
- * row. Explicit action-card semantics provide the expected local traversal:
- * RIGHT enters the action row, LEFT/RIGHT walks it, and LEFT from its first
- * action returns to the card.
- */
-function moveWithinActionCard(
-    origin: HTMLElement,
-    direction: TvDirection
-): boolean {
-    const card = origin.closest<HTMLElement>('[data-tv-action-card]');
-    const actionRow = card?.querySelector<HTMLElement>('[data-tv-action-row]');
-    if (!card || !actionRow) {
-        return false;
-    }
-
-    const actions = Array.from(
-        actionRow.querySelectorAll<HTMLButtonElement>('button:not([disabled])')
-    );
-    if (actions.length === 0) {
-        return false;
-    }
-
-    if (origin === card && direction === 'right') {
-        applyFocus(actions[0]);
-        return true;
-    }
-
-    const actionIndex = actions.indexOf(origin as HTMLButtonElement);
-    if (actionIndex < 0) {
-        return false;
-    }
-
-    if (direction === 'right' && actionIndex < actions.length - 1) {
-        applyFocus(actions[actionIndex + 1]);
-        return true;
-    }
-    if (direction === 'left' && actionIndex > 0) {
-        applyFocus(actions[actionIndex - 1]);
-        return true;
-    }
-    if (
-        direction === 'left' &&
-        actionIndex === 0 &&
-        card.hasAttribute('tabindex')
-    ) {
-        applyFocus(card);
-        return true;
-    }
-
-    return false;
-}
-
-/**
- * Categories follow focus — no OK needed. Debounced so that traversing the
- * column on the way somewhere else does not load every category it passes,
- * and skipped when the row is already the active category, because re-clicking
- * it reloads content for nothing (returning into the column via position
- * memory would otherwise reload on every visit).
- */
-const AUTO_SELECT_DELAY_MS = 300;
-let autoSelectTimer: ReturnType<typeof setTimeout> | undefined;
-
-function scheduleAutoSelect(element: HTMLElement): void {
-    if (autoSelectTimer !== undefined) {
-        clearTimeout(autoSelectTimer);
-        autoSelectTimer = undefined;
-    }
-
-    if (!isContextCategoryItem(element) || isAlreadySelectedCategory(element)) {
-        return;
-    }
-
-    autoSelectTimer = setTimeout(() => {
-        autoSelectTimer = undefined;
-        // Only if focus settled here; it may have moved on during the delay.
-        if (currentElement() === element) {
-            element.click();
-        }
-    }, AUTO_SELECT_DELAY_MS);
-}
-
-/** First focusable thing on screen, used when nothing holds focus yet. */
-function focusFirstCandidate(): boolean {
-    const candidates = collectCandidates();
-    if (candidates.length === 0) {
-        return false;
-    }
-
-    // Topmost, then leftmost: the reading order a viewer expects to start at.
-    const first = candidates.reduce((best, candidate) =>
-        candidate.rect.top < best.rect.top ||
-        (candidate.rect.top === best.rect.top && candidate.rect.left < best.rect.left)
-            ? candidate
-            : best
-    );
-
-    applyFocus(first.target);
-    return true;
-}
-
-/**
- * Unfolds the collapsed category column and lands on the row it was left on.
- *
- * The panel has to be expanded before its candidates can be collected: while
- * inert its children are excluded by design.
- */
-function reopenContextPanel(): boolean {
-    const panel = expandContext();
-    if (!panel) {
-        return false;
-    }
-
-    // Not read from the selection marks: the column holds several zones, and
-    // the first mark in DOM order is the one in its header, not the row the
-    // user left. Candidate collection is no help either — the panel is
-    // mid-transition and still measures near zero, so the row would be filtered
-    // out as invisible.
-    const remembered = getLastContextFocus();
-    if (remembered) {
-        applyFocus(remembered);
-        return true;
-    }
-
-    const candidates = collectCandidates(panel);
-    if (candidates.length === 0) {
-        return false;
-    }
-
-    applyFocus(candidates[0].target);
-    return true;
-}
+const panels = new TvPanelNavigation(applyFocus, memory);
 
 function move(direction: TvDirection): boolean {
-    // Fullscreen video owns the D-pad outright: UP/DOWN zap, LEFT returns to
-    // the list, RIGHT is swallowed. No geometry while the video has the screen.
+    // Fullscreen video owns the D-pad outright: UP/DOWN zap, LEFT/RIGHT are
+    // swallowed. BACK is the explicit gesture that reveals the list.
     if (handleFullscreenDirection(direction)) {
         return true;
     }
 
     const origin = currentElement();
     if (!origin) {
-        return focusFirstCandidate();
+        return panels.focusFirstCandidate();
     }
 
-    if (moveWithinActionCard(origin, direction)) {
+    if (panels.moveWithinActionCard(origin, direction)) {
         return true;
     }
 
-    // Left out of the content restores the folded column first, one panel at a
-    // time. Geometry alone would skip straight past it to the rail, which is
-    // still on screen — the user would lose the categories entirely and have to
-    // come back through the rail to find them again.
-    if (
-        direction === 'left' &&
-        resolveRegion(origin) === 'content' &&
-        getContextPanel()?.hasAttribute('inert') === true &&
-        reopenContextPanel()
-    ) {
+    if (panels.moveWithinEpgRow(origin, direction)) {
         return true;
     }
 
@@ -394,10 +157,14 @@ function move(direction: TvDirection): boolean {
     const overlay = findUnmanagedOverlay();
     const searchRoot: ParentNode = overlay ?? document;
 
+    const originRegion = resolveRegion(origin);
     const candidates = collectCandidates(searchRoot).filter(
         (candidate) =>
             candidate.target !== origin &&
-            isRegionCrossingAllowed(origin, candidate.target, direction)
+            isRegionCrossingAllowed(origin, candidate.target, direction) &&
+            (direction === 'up' ||
+                direction === 'down' ||
+                resolveRegion(candidate.target) === originRegion)
     );
     const target = findBestCandidate(
         origin.getBoundingClientRect(),
@@ -417,7 +184,10 @@ function move(direction: TvDirection): boolean {
                 collectCandidates(searchRoot).filter(
                     (c) =>
                         c.target !== origin &&
-                        isRegionCrossingAllowed(origin, c.target, direction)
+                        isRegionCrossingAllowed(origin, c.target, direction) &&
+                        (direction === 'up' ||
+                            direction === 'down' ||
+                            resolveRegion(c.target) === originRegion)
                 ),
                 direction
             );
@@ -479,11 +249,24 @@ function activate(): boolean {
         return promoteVirtualFocus();
     }
 
+    if (isContextCategoryItem(active)) {
+        // Category browsing is an explicit OK action on TV. Confirm it first,
+        // then fold the category column and put focus on the first channel.
+        noteContextFocus(active);
+        active.click();
+        collapseContext();
+        panels.focusFirstChannelAfterCategorySelection(active, currentElement);
+        return true;
+    }
+
     if (handleCatchupProgrammeOk(active)) return true;
 
-    // The benchmark's two-step OK: the first press on a channel tunes it and
-    // the list survives; the second — the row is now the active one — commits
-    // to fullscreen. OK on the player itself commits the same way.
+    const channelRow = active.closest<HTMLElement>('.channel-list-item');
+    const selectingChannel = channelRow !== null;
+
+    // OK on the already-active channel or on the player commits to fullscreen.
+    // A first OK on an idle channel falls through to its click handler below,
+    // starts playback and folds the channel list.
     //
     // Only before fullscreen. `enterFullscreen()` reports success for an
     // already-fullscreen player, so leaving this reachable swallowed every OK
@@ -497,12 +280,29 @@ function activate(): boolean {
         }
     }
 
+    if (selectingChannel) {
+        panels.rememberChannel(channelRow);
+    }
     active.click();
+    if (selectingChannel) {
+        panels.collapseChannelList();
+        // Native player controls may only exist after the stream component has
+        // rendered. Give them focus when available so the hidden list never
+        // remains the apparent owner of the remote.
+        if (!focusPlayerControls()) {
+            window.setTimeout(() => focusPlayerControls(), 100);
+        }
+    }
     return true;
 }
 
 function onKeyDown(event: KeyboardEvent): void {
-    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) {
+    if (
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey
+    ) {
         return;
     }
 
@@ -595,6 +395,43 @@ function goBack(): void {
         return;
     }
 
+    // BACK from the player first restores the channel list. A further BACK
+    // reopens the category column. The first BACK from fullscreen has already
+    // been consumed by exitFullscreen().
+    const active = currentElement();
+    // Once a channel has been tuned, BACK first restores only its channel
+    // list. The category column remains a separate BACK step.
+    if (panels.isChannelListCollapsed() && panels.reopenChannelList()) {
+        return;
+    }
+    if (
+        (active === null || resolveRegion(active) === 'content') &&
+        isContextCollapsed() &&
+        panels.reopenContextPanel()
+    ) {
+        return;
+    }
+
+    // BACK from the category panel returns to the tray. LEFT/RIGHT never
+    // cross this boundary; the remote has an explicit parent action instead.
+    if (active && resolveRegion(active) === 'context' && panels.focusTray()) {
+        return;
+    }
+
+    // The tray is the app root on Android TV. A single BACK is deliberately
+    // consumed as the first half of the close gesture; a second BACK within
+    // the short window stops the native player and finishes the Activity.
+    // This keeps an accidental press from quitting while still providing an
+    // explicit way out once focus has returned to the tray.
+    if (
+        (active !== null && resolveRegion(active) === 'rail') ||
+        (active === null &&
+            document.documentElement.getAttribute('data-tv-region') === 'rail')
+    ) {
+        handleTrayBack();
+        return;
+    }
+
     const navigation = (
         globalThis.window as Window & {
             navigation?: { canGoBack?: boolean };
@@ -631,6 +468,11 @@ function dispatchFromNative(key: string, repeatCount = 0): void {
         return;
     }
 
+    // BACK must be a consecutive double press. Any other remote action starts
+    // a fresh sequence instead of allowing a delayed second BACK to close the
+    // app unexpectedly.
+    resetTrayBackSequence();
+
     // Every press below can leave focus sitting on a transport control, which
     // pins the bar open. Re-arming here rather than at each call site means
     // the timer measures how long the remote has been quiet.
@@ -641,7 +483,10 @@ function dispatchFromNative(key: string, repeatCount = 0): void {
     }
 }
 
-function handleNavigationKey(mapped: TvDirection | 'ok', repeatCount = 0): void {
+function handleNavigationKey(
+    mapped: TvDirection | 'ok',
+    repeatCount = 0
+): void {
     const active = currentElement();
     if (tvRange.handleTvRangeKey(active, mapped, repeatCount)) return;
     // Ignore repeats outside an active range so a held D-pad cannot race UI.
@@ -655,7 +500,10 @@ function handleNavigationKey(mapped: TvDirection | 'ok', repeatCount = 0): void 
     // function is the only thing that ever sees these presses.
     if (isNativeControlOpen(active)) {
         const target = document.activeElement ?? document.body;
-        dispatchRealKey(mapped === 'ok' ? 'Enter' : KEY_BY_DIRECTION[mapped], target);
+        dispatchRealKey(
+            mapped === 'ok' ? 'Enter' : KEY_BY_DIRECTION[mapped],
+            target
+        );
         return;
     }
 

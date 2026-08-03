@@ -138,18 +138,18 @@ describe('player keys', () => {
             expect(exitFullscreen()).toBe(false);
         });
 
-        it('owns every direction while fullscreen, including inert RIGHT', () => {
+        it('owns every direction while fullscreen, including inert LEFT/RIGHT', () => {
             document.body.innerHTML =
                 '<app-web-player-view><video></video></app-web-player-view>';
             enterFullscreen();
 
             // RIGHT does nothing but must be swallowed, or the WebView acts.
             expect(handleFullscreenDirection('right')).toBe(true);
-            // LEFT returns to the list layout.
+            // LEFT also stays in fullscreen; BACK is the explicit exit.
             expect(handleFullscreenDirection('left')).toBe(true);
             expect(
                 document.documentElement.hasAttribute(TV_FULLSCREEN_ATTRIBUTE)
-            ).toBe(false);
+            ).toBe(true);
         });
 
         it('stays out of the way when not fullscreen', () => {

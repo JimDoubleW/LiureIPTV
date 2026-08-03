@@ -973,6 +973,34 @@ with a low-contrast fill relative to that panel's background, and only the
 focused panel promotes its selection to the near-white pill.** Three visual
 states and per-panel position memory are the same mechanism, not two features.
 
+The current navigation contract deliberately uses **OK/BACK for panel
+transitions**; LEFT/RIGHT are local to the panel that already owns focus:
+
+1. OK on a Live Category confirms it, folds the category column and focuses the
+   first channel. Merely moving over categories does not reload them.
+2. OK on a channel starts playback and folds the Channels sidebar. BACK
+   restores Channels and returns focus to the previously selected row.
+3. Another BACK from Channels restores Live Categories. BACK from Live
+   Categories returns to the tray.
+4. In fullscreen, LEFT/RIGHT stay inside the player and BACK leaves fullscreen
+   before any panel is restored.
+5. In the tray, one BACK is consumed; a second consecutive BACK within 650 ms
+   calls the native player's id-independent `stop()`, waits for ExoPlayer to be
+   muted/stopped/released, then calls Capacitor `App.exitApp()`. Any intervening
+   remote key cancels the double-BACK sequence.
+
+The EPG list row is itself the primary focus target. RIGHT enters its
+`data-tv-row-action` controls (Watch, then programme information), LEFT walks
+back through them and returns to the row. This explicit local traversal is
+required because the buttons sit inside the row rectangle and generic spatial
+scoring cannot enter them.
+
+Implementation ownership is split to keep the production file-size rule
+enforced: `tv-navigation.ts` orchestrates dispatch and spatial movement,
+`tv-panel-navigation.ts` owns semantic panel transitions and local row actions,
+`tv-native-control-keys.ts` hands real key events to Material/native widgets,
+and `tv-app-exit.ts` owns the double-BACK lifecycle sequence.
+
 ## Minimize Conflict Surface
 
 This is the rule that decides how expensive every future upstream sync will be.
@@ -1019,23 +1047,46 @@ trusting anything that tag says about repo structure.
 
 ## Building and running the APK
 
-```bash
-pnpm nx build web --configuration=pwa   # must run first: Capacitor copies dist/apps/web
-npx cap sync android
+Use the repository script for normal development:
 
+```bash
+./tools/android/build-android.sh -b
+./tools/android/build-android.sh -b -i -l -a <box>:5555
+./tools/android/build-android.sh -s -a <box>:5555
+```
+
+`-b/--build` is the only option that builds: it runs
+`pnpm nx build web --configuration=pwa`, cleans the copied web assets, runs
+`pnpm exec cap sync android`, then assembles the debug APK. Without `-b`, the
+ADB-only options use the existing APK or installation: `-i/--install`,
+`-l/--launch`, `-s/--screenshot`, and `-a/--address`. If an addressed device is
+not already reachable, the script tries `adb connect` before retrying. A bare
+invocation is rejected instead of rebuilding implicitly.
+
+Direct equivalent, useful only when diagnosing the script:
+
+```bash
+pnpm nx build web --configuration=pwa
+pnpm exec cap sync android
 cd android
-export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
-export ANDROID_HOME=$HOME/Android/Sdk
-./gradlew assembleDebug
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew assembleDebug
 adb -s <box>:5555 install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Two toolchain traps on this machine:
+Toolchain and versioning facts:
 
-- **JDK 21 is required.** The default JDK is 25, which AGP 8.13 rejects. Nothing
-  in the error message points at the JDK version.
-- **`ANDROID_HOME` must be exported.** `android/local.properties` is generated
-  per-machine and git-ignored, so a fresh clone has no `sdk.dir`.
+- **JDK 21 is required.** The helper accepts `JAVA_HOME` when it points at Java
+  21+, otherwise probes the usual system JDK 21 locations and fails clearly.
+  Running Gradle with Java 17 fails with `invalid source release: 21`.
+- **The Android SDK must be configured.** The helper accepts `ANDROID_HOME` or
+  `ANDROID_SDK_ROOT`, or derives both from `android/local.properties` when it
+  contains `sdk.dir`.
+- `android/app/build.gradle` reads the semantic version from `package.json`.
+  Development builds use the Git commit count as `versionCode` and
+  `<version>-dev.<count>.<short-sha>` as `versionName`; a clean commit tagged
+  with `<version>` or `v<version>` keeps the plain semantic version.
+  `ANDROID_VERSION_CODE` and `ANDROID_VERSION_NAME` override those values for a
+  controlled build.
 
 `android/.gitignore` (generated) already covers `build/`, `.gradle/`,
 `local.properties` and the copied web assets, so only the ~50 source files are
@@ -1396,10 +1447,14 @@ And the header spans everything, so an element's x coordinate says nothing about
 which panel it belongs to.
 
 Progressive collapse is driven by `panel-region.ts`, which publishes
-`data-tv-region` on the document element; the stylesheet narrows
-`aside.context-panel` when the region is `content`. It narrows to a strip rather
-than to zero on purpose: a zero-width panel has zero-sized children, candidate
-collection drops them, and left would have nothing to move to.
+`data-tv-region` on the document element. Category rows are explicit OK
+targets: confirmation marks `aside.context-panel:has(.category-item)` inert and
+moves focus to Channels. Selecting a channel invokes the live layout's real
+sidebar toggle and marks the zero-width `.sidebar` inert; BACK invokes its
+restore toggle and returns focus to the remembered channel. LEFT/RIGHT never
+cross tray/category/channel boundaries, so invisible collapsed panels cannot
+capture geometric focus. BACK is the only parent transition and restores one
+level at a time.
 
 ## EPG
 
@@ -1441,11 +1496,13 @@ REST `.ts` timeshift URL reached ExoPlayer's `playing` state with a known
 duration. Do not treat a rejected `HEAD` as proof that catch-up is unavailable.
 The shared seek slider stays virtually focused on Android TV because real focus
 on `<input type="range">` raises the Mi Box soft keyboard even though the
-control cannot accept text. OK enters an explicit adjustment mode, LEFT/RIGHT
-adjust and commit the position, and holding either direction progressively
-accelerates the adjustment (normal, 2x, 5x, 10x then 30x steps). Repeats are
-ignored outside an active slider, and BACK exits that mode and restores the
-previous player control without navigating away.
+control cannot accept text. A real player button remains focused while the
+slider owns virtual focus, which keeps the controls and slider visible without
+raising the keyboard. OK enters an explicit adjustment mode, LEFT/RIGHT adjust
+and commit the position, and holding either direction progressively accelerates
+the adjustment (normal, 2x, 5x, 10x then 30x steps). Repeats are ignored
+outside an active slider, and BACK exits that mode and restores the previous
+player control without navigating away.
 A quick double OK on an archive programme keeps the first activation inline,
 then switches its catch-up playback to fullscreen as soon as its player exists.
 The Android XMLTV lookup returns programmes whose end falls in the preceding

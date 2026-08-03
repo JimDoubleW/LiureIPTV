@@ -40,6 +40,7 @@
         <button
             type="button"
             class="watch"
+            data-tv-row-action
             (click)="onWatch($event)"
             [attr.aria-label]="'EPG.TIMELINE.WATCH_FROM_START' | translate"
         >
@@ -51,6 +52,7 @@
     <button
         type="button"
         class="icbtn"
+        data-tv-row-action
         (click)="onInfo($event)"
         [attr.aria-label]="
             'EPG.PROGRAM_DIALOG.SHOW_PROGRAM_DETAILS' | translate
