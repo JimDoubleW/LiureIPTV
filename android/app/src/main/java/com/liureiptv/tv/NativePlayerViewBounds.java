@@ -71,6 +71,44 @@ public final class NativePlayerViewBounds {
         return new Bounds((int) left, (int) top, outWidth, outHeight);
     }
 
+    /**
+     * Fits a video rectangle inside its host without changing the video's
+     * aspect ratio. The returned rectangle remains in the same parent
+     * coordinate space as {@code container}; invalid video dimensions leave
+     * the container untouched until Media3 reports a real video size.
+     */
+    public static Bounds fitVideo(
+            Bounds container, int videoWidth, int videoHeight, float pixelWidthHeightRatio) {
+        if (container == null || videoWidth <= 0 || videoHeight <= 0) {
+            return container;
+        }
+
+        double pixelRatio =
+                Float.isFinite(pixelWidthHeightRatio) && pixelWidthHeightRatio > 0
+                        ? pixelWidthHeightRatio
+                        : 1.0;
+        double videoRatio = ((double) videoWidth * pixelRatio) / videoHeight;
+        double containerRatio = (double) container.width / container.height;
+
+        if (containerRatio > videoRatio) {
+            int fittedWidth = Math.max(1, (int) Math.round(container.height * videoRatio));
+            int horizontalInset = (container.width - fittedWidth) / 2;
+            return new Bounds(
+                    container.x + horizontalInset,
+                    container.y,
+                    fittedWidth,
+                    container.height);
+        }
+
+        int fittedHeight = Math.max(1, (int) Math.round(container.width / videoRatio));
+        int verticalInset = (container.height - fittedHeight) / 2;
+        return new Bounds(
+                container.x,
+                container.y + verticalInset,
+                container.width,
+                fittedHeight);
+    }
+
     private static double sanitizeScale(double devicePixelRatio) {
         return Double.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1.0;
     }

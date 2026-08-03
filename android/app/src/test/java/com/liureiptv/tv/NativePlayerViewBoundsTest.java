@@ -71,4 +71,36 @@ public class NativePlayerViewBoundsTest {
             assertEquals(new NativePlayerViewBounds.Bounds(372, 60, 578, 330), result);
         }
     }
+
+    @Test
+    public void centersLandscapeVideoInsideShortWideHost() {
+        NativePlayerViewBounds.Bounds result =
+                NativePlayerViewBounds.fitVideo(
+                        new NativePlayerViewBounds.Bounds(120, 80, 1800, 450),
+                        1920,
+                        1080,
+                        1.0f);
+
+        assertEquals(new NativePlayerViewBounds.Bounds(620, 80, 800, 450), result);
+    }
+
+    @Test
+    public void centersPortraitVideoInsideWideHostAndHonorsPixelRatio() {
+        NativePlayerViewBounds.Bounds result =
+                NativePlayerViewBounds.fitVideo(
+                        new NativePlayerViewBounds.Bounds(10, 20, 1000, 600),
+                        720,
+                        1280,
+                        1.0f);
+
+        assertEquals(new NativePlayerViewBounds.Bounds(341, 20, 338, 600), result);
+
+        NativePlayerViewBounds.Bounds anamorphic =
+                NativePlayerViewBounds.fitVideo(
+                        new NativePlayerViewBounds.Bounds(0, 0, 1000, 800),
+                        720,
+                        576,
+                        1.25f);
+        assertEquals(new NativePlayerViewBounds.Bounds(0, 80, 1000, 640), anamorphic);
+    }
 }

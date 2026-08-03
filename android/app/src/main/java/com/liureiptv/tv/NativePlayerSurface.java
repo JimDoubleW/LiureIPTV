@@ -12,8 +12,10 @@ import com.getcapacitor.Bridge;
 /**
  * Adds/removes a native {@link SurfaceView} as a sibling of the Capacitor
  * WebView, in the same CoordinatorLayout parent
- * (capacitor_bridge_layout_main.xml), positioned to match the
- * android-native-player component's placeholder div.
+ * (capacitor_bridge_layout_main.xml), positioned inside the
+ * android-native-player component's placeholder bounds. The plugin may use a
+ * smaller centered rectangle there when the stream's aspect ratio requires
+ * letterboxing or pillarboxing.
  *
  * <p>The surface keeps SurfaceView's default Z ordering — behind the window,
  * visible through whatever pixels the WebView leaves fully transparent
@@ -74,6 +76,9 @@ final class NativePlayerSurface {
         // punch-through needs — the surface sits behind the window and shows
         // through the WebView's transparent pixels. See the class doc.
         surfaceView = new SurfaceView(bridge.getContext());
+        // The plugin may center a narrower/taller video rectangle inside the
+        // host; fill the resulting letterbox/pillarbox area with black.
+        surfaceView.setBackgroundColor(Color.BLACK);
 
         parent.addView(surfaceView, 0, toLayoutParams(bounds));
         webView.setBackgroundColor(Color.TRANSPARENT);

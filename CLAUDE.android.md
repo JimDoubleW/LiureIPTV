@@ -1194,7 +1194,7 @@ mid-flight architecture change; read the fixed-bug entry above
 ("native video was actually invisible") before touching compositing here.**
 Scope: live TS/HLS across all three portal types (M3U, Xtream, Stalker),
 capability flags `{volume: true, seek: !isLive, fullscreen: true}` only —
-audio tracks, subtitles, playback speed, aspect ratio, recording, PiP, series
+audio tracks, subtitles, playback speed, aspect override, recording, PiP, series
 navigation and DRM are still unimplemented (adapter reports them `false`; no
 UI control renders). The engine is an **unconditional override on Android**,
 not a Settings-selectable option — applied through the same `[playerOverride]`
@@ -1218,6 +1218,12 @@ what keeps DASH on Shaka.
   `TV_FULLSCREEN_LOCKED_ATTRIBUTE` for the session; `exitFullscreen()` refuses
   while locked, so BACK falls through to history and closes the player instead
   of uncovering a stage with invisible video still playing behind it.
+- **The native surface preserves the stream's aspect ratio.** ExoPlayer reports
+  `VideoSize` (including anamorphic pixel ratio) to the Capacitor plugin, which
+  fits a centered rectangle inside the measured player host. The unused area
+  is black, so a short inline EPG panel can no longer stretch a 16:9 or 4:3
+  stream across the full width. Bounds are recomputed after both layout and
+  metadata changes; the aspect-ratio *override* control remains out of scope.
 - **Two traps cost real time getting that fullscreen to fill the screen**, both
   in `tv-focus.styles.ts`, and both invisible in the computed style:
   `//` line comments are not CSS — the parser treats one as a bad declaration

@@ -16,6 +16,7 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.TrackSelectionOverride;
 import androidx.media3.common.Tracks;
+import androidx.media3.common.VideoSize;
 import androidx.media3.datasource.DataSource;
 import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
@@ -67,6 +68,10 @@ public class AndroidNativePlayerPlugin extends Plugin {
 
     private ExoPlayer player;
     private NativePlayerSurface surface;
+    private NativePlayerViewBounds.Bounds containerBounds;
+    private int videoWidth;
+    private int videoHeight;
+    private float videoPixelWidthHeightRatio = 1f;
     private String sessionId;
     private boolean isLive;
     private String lastError;
@@ -110,6 +115,14 @@ public class AndroidNativePlayerPlugin extends Plugin {
             // own change test would drop both updates.
             pushSnapshotIfChanged();
         }
+
+        @Override
+        public void onVideoSizeChanged(VideoSize videoSize) {
+            videoWidth = videoSize.width;
+            videoHeight = videoSize.height;
+            videoPixelWidthHeightRatio = videoSize.pixelWidthHeightRatio;
+            updateSurfaceBounds();
+        }
     };
 
     @PluginMethod
@@ -124,6 +137,10 @@ public class AndroidNativePlayerPlugin extends Plugin {
             double volume = call.getDouble("volume", 1.0);
 
             sessionId = UUID.randomUUID().toString();
+            containerBounds = boundsFromCall(boundsJson, devicePixelRatio);
+            videoWidth = 0;
+            videoHeight = 0;
+            videoPixelWidthHeightRatio = 1f;
             lastError = null;
             lastPushedStatus = null;
             lastPushedTracksSignature = null;
@@ -135,7 +152,7 @@ public class AndroidNativePlayerPlugin extends Plugin {
 
             surface = new NativePlayerSurface(getBridge());
             player.setVideoSurfaceView(
-                    surface.attach(boundsFromCall(boundsJson, devicePixelRatio)));
+                    surface.attach(containerBounds));
 
             startPositionPolling();
 
@@ -252,7 +269,8 @@ public class AndroidNativePlayerPlugin extends Plugin {
             if (isCurrentSession(call) && surface != null) {
                 JSObject boundsJson = call.getObject("bounds");
                 double devicePixelRatio = call.getDouble("devicePixelRatio", 1.0);
-                surface.updateBounds(boundsFromCall(boundsJson, devicePixelRatio));
+                containerBounds = boundsFromCall(boundsJson, devicePixelRatio);
+                updateSurfaceBounds();
             }
             call.resolve();
         });
@@ -332,6 +350,10 @@ public class AndroidNativePlayerPlugin extends Plugin {
         }
 
         sessionId = null;
+        containerBounds = null;
+        videoWidth = 0;
+        videoHeight = 0;
+        videoPixelWidthHeightRatio = 1f;
         lastError = null;
         lastPushedStatus = null;
         lastPushedTracksSignature = null;
@@ -345,6 +367,19 @@ public class AndroidNativePlayerPlugin extends Plugin {
 
     private void stopPositionPolling() {
         positionPollHandler.removeCallbacks(positionPollRunnable);
+    }
+
+    /** Apply a centered contain rectangle once both host and video geometry exist. */
+    private void updateSurfaceBounds() {
+        if (surface == null || containerBounds == null) {
+            return;
+        }
+        surface.updateBounds(
+                NativePlayerViewBounds.fitVideo(
+                        containerBounds,
+                        videoWidth,
+                        videoHeight,
+                        videoPixelWidthHeightRatio));
     }
 
     /**

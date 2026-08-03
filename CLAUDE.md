@@ -1101,6 +1101,9 @@ confirms a category or channel, and BACK reveals Channels, then Live
 Categories, then the tray. OK on a channel starts playback and folds Channels;
 BACK restores it at the previous channel. A consecutive double BACK in the tray
 stops/releases ExoPlayer before closing the Android activity.
+The native Android SurfaceView fits each stream inside its host using the
+reported video and pixel aspect ratio, centered with black letterbox/pillarbox
+space instead of stretching when the inline EPG reduces the player height.
 Android downloads reuse the shared downloads UI through a partial bridge backed
 by the OS `DownloadManager` and WebView SQLite. Android's document-tree picker
 selects a persistent destination; TV firmware without a real picker gets a
