@@ -281,6 +281,14 @@ export class LiveStreamLayoutComponent implements OnInit, OnDestroy {
     readonly activeStreamUrl = computed(
         () => this.activePlayback()?.streamUrl ?? ''
     );
+    /**
+     * A plain field on the service, not a signal, so the template reads it
+     * through this getter rather than aliasing it the way `activePlayback`
+     * aliases the playback signal above.
+     */
+    get resumeCategoryId(): number | null {
+        return this.livePlaybackMemory.categoryId;
+    }
     favorites = new Map<number, boolean>();
 
     constructor() {
@@ -451,7 +459,8 @@ export class LiveStreamLayoutComponent implements OnInit, OnDestroy {
         // store no-op.
         this.selectLiveItemCategory(item);
         this.livePlaybackMemory.remember(
-            this.xtreamStore.currentPlaylist()?.id
+            this.xtreamStore.currentPlaylist()?.id,
+            item.category_id
         );
         this.activePlayback.set({
             streamUrl,
@@ -667,7 +676,8 @@ export class LiveStreamLayoutComponent implements OnInit, OnDestroy {
 
         this.activeCatchupProgram.set(program);
         this.livePlaybackMemory.remember(
-            this.xtreamStore.currentPlaylist()?.id
+            this.xtreamStore.currentPlaylist()?.id,
+            item.category_id
         );
         this.activePlayback.set({
             streamUrl: catchupUrl,

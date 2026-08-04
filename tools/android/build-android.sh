@@ -4,15 +4,16 @@ set -euo pipefail
 
 show_help() {
     cat <<'EOF'
-Usage: build-android.sh [-b] [-i] [-l] [-s] [-a ADDRESS]
+Usage: build-android.sh [-b] [-c] [-i] [-l] [-s] [-a ADDRESS]
                         [--build] [--install] [--launch] [--screenshot]
-                        [--address ADDRESS]
+                        [--clean] [--address ADDRESS]
 
-Builds the LiureIPTV Android app only with --build. Without --build,
-ADB-only actions use the existing installation or APK.
+Builds the LiureIPTV Android app only with --build. --clean removes generated
+Android/web build outputs; combine it with --build for a clean rebuild.
 
 Options:
   -b, --build       Build the Android APK.
+  -c, --clean       Remove generated Android/web build outputs.
   -i, --install     Install the resulting APK with adb -r.
   -l, --launch      Launch the app on the target device with adb.
   -s, --screenshot  Capture a PNG screenshot from the target device with adb.
@@ -79,6 +80,7 @@ install_apk=0
 launch_app=0
 screenshot_app=0
 build_app=0
+clean_build=0
 adb_address=""
 
 while [[ $# -gt 0 ]]; do
@@ -95,6 +97,9 @@ while [[ $# -gt 0 ]]; do
         --build)
             build_app=1
             ;;
+        --clean)
+            clean_build=1
+            ;;
         --address|--serial)
             shift
             [[ $# -gt 0 ]] || die "--address needs a device address"
@@ -102,6 +107,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         -b)
             build_app=1
+            ;;
+        -c)
+            clean_build=1
             ;;
         -i)
             install_apk=1
@@ -128,8 +136,27 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-if [[ "$build_app" -eq 0 && "$install_apk" -eq 0 && "$launch_app" -eq 0 && "$screenshot_app" -eq 0 ]]; then
-    die "no action requested; use --build, --install, --launch, or --screenshot"
+if [[ "$build_app" -eq 0 && "$clean_build" -eq 0 && "$install_apk" -eq 0 && "$launch_app" -eq 0 && "$screenshot_app" -eq 0 ]]; then
+    die "no action requested; use --build, --clean, --install, --launch, or --screenshot"
+fi
+
+clean_build_outputs() {
+    echo "Cleaning generated Android/web build outputs..."
+    rm -rf \
+        "$root_dir/android/app/build" \
+        "$root_dir/android/build" \
+        "$root_dir/android/.gradle" \
+        "$root_dir/android/capacitor-cordova-android-plugins/build" \
+        "$root_dir/android/app/src/main/assets/public" \
+        "$root_dir/dist/apps/web"
+    echo "Clean complete."
+}
+
+if [[ "$clean_build" -eq 1 ]]; then
+    clean_build_outputs
+    if [[ "$build_app" -eq 0 && "$install_apk" -eq 0 && "$launch_app" -eq 0 && "$screenshot_app" -eq 0 ]]; then
+        exit 0
+    fi
 fi
 
 if [[ "$build_app" -eq 1 ]]; then

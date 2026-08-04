@@ -128,6 +128,11 @@ describe('SeasonContainerComponent', () => {
             fixture.nativeElement.querySelectorAll('.episode-card').length
         ).toBe(1);
         expect(
+            fixture.nativeElement
+                .querySelector('.episode-card')
+                .getAttribute('data-tv-focus-key')
+        ).toBe('episode-101');
+        expect(
             fixture.nativeElement.querySelectorAll('.season-tabs__pill').length
         ).toBe(2);
     });

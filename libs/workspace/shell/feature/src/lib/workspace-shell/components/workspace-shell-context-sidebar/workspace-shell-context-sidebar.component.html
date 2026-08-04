@@ -15,6 +15,7 @@
             <aside
                 class="context-panel context-panel--route"
                 [class.context-panel--collapsed]="isContextPanelCollapsed()"
+                [attr.data-tv-context-section]="section"
                 appResizable
                 [minWidth]="240"
                 [maxWidth]="560"

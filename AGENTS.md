@@ -32,6 +32,15 @@ This file provides guidance to coding agents working in this repository.
 - Keep the root `CLAUDE.md`, `CLAUDE.android.md`, and this file up to date. They are living documents: whenever a change touches something they describe — monorepo structure (new/moved/renamed apps or libs), routes, database schema/tables, stores and their features, key components, commands, environment behavior, coding conventions, or the Android TV port — update the affected sections as part of the same task.
 - Keep the process sections mirrored between `AGENTS.md` and `CLAUDE.md` in sync. Keep facts shared by `CLAUDE.md` and `CLAUDE.android.md` synchronized as well, including the Android branch model, supported features and transports, build requirements, runtime capabilities, routes, and current limitations. Android-specific implementation details and history belong in `CLAUDE.android.md`; `CLAUDE.md` should retain the concise canonical summary and link to it.
 - Any change under `android/` or `apps/web/src/app/services/android/`, or any change to Android-specific Capacitor configuration, native playback, TV navigation, storage, imports, downloads, transport, or EPG behavior, requires an explicit `CLAUDE.android.md` impact check before the task is considered complete. Update `CLAUDE.android.md` in the same task when its current behavior, decisions, commands, landmarks, or open questions changed.
+- Android TV panel focus is semantic: category OK must focus the first real
+  channel/card in `<main>`, while an empty category must reopen and refocus its
+  category. Any asynchronously replaced, removed, or disabled card/control in
+  Movies, Series, Downloads, or Settings must recover a remaining target before
+  any tray fallback; transient overlays must not replace the remembered content
+  owner. Settings sections use OK to enter their controls and BACK to return to
+  the section list, then the tray. Android recording still has no route or list
+  screen. Keep this contract synchronized with the TV navigation reference in
+  `CLAUDE.android.md` and `CLAUDE.md`.
 - When adding a new feature area, check whether the Architecture or Key Features sections of `CLAUDE.md` describe the surrounding area; if they do, reflect the addition there instead of leaving the description stale.
 - Do not let `CLAUDE.md`, `CLAUDE.android.md`, or `AGENTS.md` drift: a stale path, route, capability, branch name, or limitation in these files poisons the context of every future agent session. If you notice an outdated claim while working, fix it (or flag it in the final summary) even if it is unrelated to the current task.
 - Repo docs are canonical even when they were originally drafted by an LLM.

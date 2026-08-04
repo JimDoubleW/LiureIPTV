@@ -54,4 +54,40 @@ describe('LivePlaybackMemoryService', () => {
 
         expect(service.playback()?.streamUrl).toBe('http://example.com/2.ts');
     });
+
+    it('remembers the category the channel airs in', () => {
+        service.remember('portal-1', 170);
+
+        expect(service.categoryId).toBe(170);
+    });
+
+    it('normalizes a string category id, matching the API shape', () => {
+        service.remember('portal-1', '170');
+
+        expect(service.categoryId).toBe(170);
+    });
+
+    it('leaves the category id untouched when the caller does not pass one', () => {
+        // forgetIfOtherPlaylist calls remember() indirectly with no category
+        // in some paths; it must not silently wipe a value set moments ago.
+        service.remember('portal-1', 170);
+
+        service.remember('portal-1');
+
+        expect(service.categoryId).toBe(170);
+    });
+
+    it('clears the category id when the portal changes', () => {
+        service.remember('portal-1', 170);
+
+        service.forgetIfOtherPlaylist('portal-2');
+
+        expect(service.categoryId).toBeNull();
+    });
+
+    it('discards a non-numeric category id', () => {
+        service.remember('portal-1', 'not-a-number');
+
+        expect(service.categoryId).toBeNull();
+    });
 });

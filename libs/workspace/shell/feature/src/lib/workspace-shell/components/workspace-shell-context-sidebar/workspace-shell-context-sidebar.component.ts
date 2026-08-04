@@ -2,6 +2,7 @@ import {
     ChangeDetectionStrategy,
     Component,
     computed,
+    effect,
     inject,
     input,
 } from '@angular/core';
@@ -61,4 +62,21 @@ export class WorkspaceShellContextSidebarComponent {
             this.isLiveCategoryRoute() &&
             this.liveSidebarStateService.isCollapsed()
     );
+
+    private wasLiveCategoryRoute = false;
+
+    constructor() {
+        effect(() => {
+            const isLiveCategoryRoute = this.isLiveCategoryRoute();
+            if (isLiveCategoryRoute && !this.wasLiveCategoryRoute) {
+                // The TV contract starts every Live TV entry at the category
+                // panel. A previous OK/BACK session may have persisted the
+                // inline sidebar as collapsed; that state is useful while
+                // staying on the route, but must not hide Live Categories on
+                // the next tray entry.
+                this.liveSidebarStateService.setState('expanded');
+            }
+            this.wasLiveCategoryRoute = isLiveCategoryRoute;
+        });
+    }
 }

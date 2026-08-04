@@ -101,6 +101,8 @@ function normalizeArtworkUrl(value: string | undefined): string | undefined {
                 @for (item of items(); track $index) {
                     @let i = $any(item);
                     <mat-card
+                        data-tv-content-card
+                        [attr.data-tv-focus-key]="focusKey(i, $index)"
                         [class.grid-card--logo]="variant() === 'logo'"
                         (click)="itemClicked.emit(item)"
                     >
@@ -257,6 +259,18 @@ export class GridListComponent {
             this.isLiveGrid() && this.settingsStore.stripCountryPrefix?.()
         );
         return stripped || 'No name';
+    };
+    protected readonly focusKey = (
+        item: GridListItem,
+        index: number
+    ): string => {
+        const id =
+            item.id ??
+            item.xtream_id ??
+            item.series_id ??
+            item.stream_id ??
+            index;
+        return `content-${this.type() || 'item'}-${id}`;
     };
 
     readonly skeletonRows = computed(() => {

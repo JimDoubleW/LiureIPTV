@@ -31,6 +31,7 @@ const {
     generateLinuxRuntimeNotices,
 } = require('../embedded-mpv/generate-linux-runtime-notices.cjs');
 const {
+    copyEmbeddedMpvNativeOutput,
     ensureSnapGraphicsContentMount,
     resolveLinuxFrameCopyPackagingContext,
 } = require('./electron-after-pack.cjs');
@@ -461,6 +462,57 @@ test('validates a provided Linux profile even when embedded MPV is optional', ()
                 }
             ),
         /cannot build target "deb"/
+    );
+});
+
+test('omits optional same-architecture Linux native artifacts when the addon is unavailable', (t) => {
+    const fixtureRoot = fs.mkdtempSync(
+        join(os.tmpdir(), 'iptvnator-optional-linux-mpv-')
+    );
+    t.after(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
+
+    const projectDir = join(fixtureRoot, 'project');
+    const sourceNativeDir = join(
+        projectDir,
+        'dist',
+        'apps',
+        'electron-backend',
+        'native'
+    );
+    const resourceDir = join(fixtureRoot, 'resources');
+    fs.mkdirSync(sourceNativeDir, { recursive: true });
+    fs.writeFileSync(
+        join(sourceNativeDir, 'embedded-mpv-unavailable.txt'),
+        'Embedded MPV is not available locally.\n'
+    );
+    fs.writeFileSync(
+        join(sourceNativeDir, 'embedded-mpv-runtime.json'),
+        '{"stale":true}\n'
+    );
+
+    assert.equal(
+        copyEmbeddedMpvNativeOutput(resourceDir, projectDir, 'linux', {
+            profile: 'flatpak',
+            targetNames: ['flatpak'],
+        }),
+        undefined
+    );
+
+    const nativeDir = join(
+        resourceDir,
+        'app.asar.unpacked',
+        'electron-backend',
+        'native'
+    );
+    assert.deepEqual(fs.readdirSync(nativeDir), []);
+    assert.deepEqual(
+        validatePackagedEmbeddedMpv(resourceDir, {
+            platform: 'linux',
+            required: false,
+            profile: 'flatpak',
+            targetNames: ['flatpak'],
+        }),
+        []
     );
 });
 

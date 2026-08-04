@@ -4,6 +4,7 @@ import {
     isAlreadySelectedCategory,
     isContextCategoryItem,
     isRegionCrossingAllowed,
+    isTvPanelCrossingAllowed,
     REGION_ATTRIBUTE,
     resolveRegion,
 } from './panel-region';
@@ -121,13 +122,19 @@ describe('panel region', () => {
 
         it('unfolds on demand so left has somewhere to go', () => {
             applyRegion(byId('tile'));
+            document
+                .querySelector('aside.context-panel')
+                ?.classList.add('context-panel--collapsed');
 
             const panel = expandContext();
 
             expect(panel?.hasAttribute('inert')).toBe(false);
-            expect(document.documentElement.getAttribute(REGION_ATTRIBUTE)).toBe(
-                'context'
+            expect(panel?.classList.contains('context-panel--collapsed')).toBe(
+                false
             );
+            expect(
+                document.documentElement.getAttribute(REGION_ATTRIBUTE)
+            ).toBe('context');
         });
 
         it('reports nothing to unfold when the column is absent', () => {
@@ -193,15 +200,57 @@ describe('panel region', () => {
         });
 
         it('keeps vertical moves within a region', () => {
-            expect(isRegionCrossingAllowed(byId('play'), byId('more'), 'down')).toBe(
-                true
-            );
+            expect(
+                isRegionCrossingAllowed(byId('play'), byId('more'), 'down')
+            ).toBe(true);
         });
 
         it('leaves horizontal crossings alone — that is what left/right are for', () => {
             expect(
                 isRegionCrossingAllowed(byId('play'), byId('rail-link'), 'left')
             ).toBe(true);
+        });
+    });
+
+    describe('isTvPanelCrossingAllowed', () => {
+        beforeEach(() => {
+            document.body.innerHTML = `
+                <app-workspace-shell-header>
+                    <button id="header"></button>
+                </app-workspace-shell-header>
+                <aside class="context-panel">
+                    <button id="category" class="category-item"></button>
+                </aside>
+                <div class="sidebar"><button id="channel"></button></div>
+                <div class="content-container">
+                    <button id="video"></button>
+                    <button id="epg"></button>
+                </div>
+            `;
+        });
+
+        it('keeps every live panel as its own focus scope', () => {
+            expect(
+                isTvPanelCrossingAllowed(byId('video'), byId('header'))
+            ).toBe(false);
+            expect(
+                isTvPanelCrossingAllowed(byId('video'), byId('channel'))
+            ).toBe(false);
+            expect(
+                isTvPanelCrossingAllowed(byId('channel'), byId('category'))
+            ).toBe(false);
+        });
+
+        it('allows movement inside the current panel', () => {
+            expect(
+                isTvPanelCrossingAllowed(byId('video'), byId('epg'))
+            ).toBe(true);
+        });
+
+        it('does not constrain elements outside the live shell scopes', () => {
+            const loose = document.createElement('button');
+            document.body.append(loose);
+            expect(isTvPanelCrossingAllowed(byId('video'), loose)).toBe(true);
         });
     });
 

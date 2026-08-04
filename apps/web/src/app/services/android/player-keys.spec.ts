@@ -4,6 +4,7 @@ import {
     exitFullscreen,
     handleCatchupProgrammeOk,
     handleFullscreenDirection,
+    handleChannelListDirection,
     isActiveChannelRow,
     isInsidePlayer,
     TV_FULLSCREEN_ATTRIBUTE,
@@ -156,6 +157,67 @@ describe('player keys', () => {
             expect(handleFullscreenDirection('up')).toBe(false);
         });
 
+        it('zaps from an expanded channel list without entering fullscreen', () => {
+            document.body.innerHTML = `
+                <div class="channel-list-item" id="r0" tabindex="0"></div>
+                <div class="channel-list-item active" id="r1" tabindex="0"></div>
+                <div class="channel-list-item" id="r2" tabindex="0"></div>
+            `;
+            const clicked: string[] = [];
+            const focused: string[] = [];
+            byId('r0').addEventListener('click', () => clicked.push('r0'));
+
+            expect(
+                handleChannelListDirection('up', byId('r1'), (target) => {
+                    target.focus();
+                    focused.push(target.id);
+                })
+            ).toBe(true);
+            expect(clicked).toEqual(['r0']);
+            expect(focused).toEqual(['r0']);
+            expect(document.activeElement).toBe(byId('r0'));
+            expect(
+                document.documentElement.hasAttribute(TV_FULLSCREEN_ATTRIBUTE)
+            ).toBe(false);
+        });
+
+        it('yields to ordinary movement when no channel is active yet', () => {
+            // Reproduced on the reference box: a freshly opened category (or
+            // one that doesn't contain the channel actually playing) has no
+            // `.active` row at all, so adjacentChannel() and a real list
+            // boundary looked identical here — both null — and every DOWN
+            // press was swallowed with the remote stuck on whatever row focus
+            // first landed on. Yielding lets the generic spatial search walk
+            // the rows normally.
+            document.body.innerHTML = `
+                <div class="channel-list-item" id="r0" tabindex="0"></div>
+                <div class="channel-list-item" id="r1" tabindex="0"></div>
+            `;
+            const focusTarget = jest.fn();
+
+            expect(
+                handleChannelListDirection('down', byId('r0'), focusTarget)
+            ).toBe(false);
+            expect(focusTarget).not.toHaveBeenCalled();
+        });
+
+        it('still zaps at the list boundary once a channel is active', () => {
+            // The genuine "at the ends" case from the surrounding comment:
+            // an active row exists, but there is nothing further to zap to in
+            // this direction. That must stay consumed, or UP/DOWN would fall
+            // through to geometric movement and appear to reselect a channel
+            // without tuning it.
+            document.body.innerHTML = `
+                <div class="channel-list-item active" id="r0" tabindex="0"></div>
+            `;
+            const focusTarget = jest.fn();
+
+            expect(
+                handleChannelListDirection('down', byId('r0'), focusTarget)
+            ).toBe(true);
+            expect(focusTarget).not.toHaveBeenCalled();
+        });
+
         it('stops zapping in live once focus is on a transport control', () => {
             // Zapping out from under a half-used control panel is the wrong
             // gesture: while the bar has focus the directions belong to it.
@@ -175,7 +237,7 @@ describe('player keys', () => {
             enterFullscreen();
 
             // Nothing focused: live still zaps, the benchmark contract.
-            expect(handleFullscreenDirection('up')).toBe(true);
+            expect(handleFullscreenDirection('down')).toBe(true);
             expect(zapped).toBe(true);
 
             zapped = false;
@@ -256,21 +318,21 @@ describe('player keys', () => {
             }
         });
 
-        it('UP tunes the next channel — the row below, numbers ascend downward', () => {
+        it('UP tunes the previous channel — the row above', () => {
             expect(zapAdjacent('up')).toBe(true);
-            expect(clicked).toEqual(['r2']);
+            expect(clicked).toEqual(['r0']);
         });
 
-        it('DOWN tunes the previous channel', () => {
+        it('DOWN tunes the next channel — the row below', () => {
             expect(zapAdjacent('down')).toBe(true);
-            expect(clicked).toEqual(['r0']);
+            expect(clicked).toEqual(['r2']);
         });
 
         it('stops at the ends instead of wrapping', () => {
             byId('r1').classList.remove('active');
             byId('r2').classList.add('active');
 
-            expect(zapAdjacent('up')).toBe(false);
+            expect(zapAdjacent('down')).toBe(false);
             expect(clicked).toEqual([]);
         });
 

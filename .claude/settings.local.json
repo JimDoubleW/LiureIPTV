@@ -43,7 +43,12 @@
       "Bash(npx --yes agent-browser --cdp 9222 eval 'document.querySelector\\(\"\".mat-mdc-paginator-range-label\"\"\\)?.textContent?.trim\\(\\)')",
       "Skill(electron)",
       "Bash(node:*)",
-      "Bash(pkill -f \"chrome-cdp-debug\")"
+      "Bash(pkill -f \"chrome-cdp-debug\")",
+      "Bash(timeout 900 pnpm nx test web --testPathPatterns='services/android/player-keys' --silent)",
+      "Bash(python3 -)",
+      "Bash(timeout 900 pnpm nx test web --testPathPatterns='services/android' --silent)",
+      "Bash(timeout 900 pnpm nx lint web)",
+      "Bash(timeout 900 pnpm run typecheck:web)"
     ],
     "deny": [],
     "ask": []

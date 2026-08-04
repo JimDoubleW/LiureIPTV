@@ -25,9 +25,35 @@ export class LivePlaybackMemoryService {
 
     private playlistId: string | null = null;
 
-    /** Records which portal the remembered playback belongs to. */
-    remember(playlistId: string | null | undefined): void {
+    /**
+     * The category the remembered channel belongs to.
+     *
+     * Leaving Live TV for another section and coming back resets
+     * `selectedCategoryId` (`setSelectedContentType` clears it on every
+     * content-type switch, live/vod/series alike — expected for a mouse
+     * user, who can reselect a category in one click). A plain field, not a
+     * signal: a caller only needs its value once, at the moment the route
+     * remounts, not a live reactive binding.
+     */
+    categoryId: number | null = null;
+
+    /**
+     * Records which portal the remembered playback belongs to, and which
+     * category the channel airs in. `categoryId` is optional so
+     * `forgetIfOtherPlaylist`'s internal reset and any future caller that
+     * only cares about the playlist don't have to pass a value they don't
+     * have.
+     */
+    remember(
+        playlistId: string | null | undefined,
+        categoryId?: number | string | null
+    ): void {
         this.playlistId = playlistId ?? null;
+        if (categoryId === undefined) {
+            return;
+        }
+        const numeric = categoryId === null ? NaN : Number(categoryId);
+        this.categoryId = Number.isFinite(numeric) ? numeric : null;
     }
 
     /**
@@ -37,6 +63,7 @@ export class LivePlaybackMemoryService {
     forgetIfOtherPlaylist(playlistId: string | null | undefined): void {
         if ((playlistId ?? null) !== this.playlistId) {
             this.playback.set(null);
+            this.categoryId = null;
             this.playlistId = playlistId ?? null;
         }
     }

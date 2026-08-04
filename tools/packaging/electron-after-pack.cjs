@@ -54,6 +54,29 @@ function copyEmbeddedMpvNativeOutput(
     fs.rmSync(destinationDir, { recursive: true, force: true });
     fs.cpSync(sourceDir, destinationDir, { recursive: true });
 
+    const addonPath = path.join(destinationDir, 'embedded_mpv.node');
+    if (!fs.existsSync(addonPath)) {
+        // A local desktop package may legitimately omit the optional runtime.
+        // Do not manufacture a native-view manifest in that case: package
+        // validation correctly treats any manifest next to a missing addon as
+        // stale frame-copy state. Foreign architectures use their dedicated
+        // unavailable marker path below instead.
+        for (const entry of [
+            'embedded-mpv-runtime.json',
+            'embedded-mpv-unavailable.txt',
+            'embedded_mpv_frame_reader.node',
+            'iptvnator_mpv_helper',
+            'iptvnator_mpv_helper.exe',
+        ]) {
+            fs.rmSync(path.join(destinationDir, entry), { force: true });
+        }
+        fs.rmSync(path.join(destinationDir, 'lib'), {
+            recursive: true,
+            force: true,
+        });
+        return undefined;
+    }
+
     const resolvedPreparationOptions =
         platform === 'linux' && preparationOptions
             ? {
@@ -293,3 +316,4 @@ module.exports.resolveLinuxFrameCopyPackagingContext =
     resolveLinuxFrameCopyPackagingContext;
 module.exports.writeEmbeddedMpvUnavailableMarker =
     writeEmbeddedMpvUnavailableMarker;
+module.exports.copyEmbeddedMpvNativeOutput = copyEmbeddedMpvNativeOutput;

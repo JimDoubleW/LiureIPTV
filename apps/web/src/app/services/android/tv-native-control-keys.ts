@@ -1,3 +1,5 @@
+import { collectCandidates } from './spatial-candidates';
+
 const KEY_CODES: Readonly<Record<string, number>> = {
     ArrowUp: 38,
     ArrowDown: 40,
@@ -33,6 +35,65 @@ function overlayHasNativeKeyboardHandling(overlay: Element): boolean {
     );
 }
 
+function isTransientFeedbackOverlay(overlay: Element): boolean {
+    if (
+        overlay.matches('.mat-mdc-dialog-panel') ||
+        overlay.querySelector('[role="dialog"], mat-dialog-container')
+    ) {
+        return false;
+    }
+
+    return (
+        overlay.matches('.mat-mdc-tooltip-panel') ||
+        overlay.querySelector(
+            '[role="tooltip"], .mat-mdc-tooltip,' +
+                ' .mat-mdc-snack-bar-container'
+        ) !== null
+    );
+}
+
+function overlayHasActionableContent(overlay: Element): boolean {
+    return (
+        overlay.querySelector(
+            'button, a[href], input, select, textarea,' +
+                ' [role="option"], [role="menuitem"], [role="slider"],' +
+                ' [role="dialog"], mat-dialog-container'
+        ) !== null
+    );
+}
+
+/** The topmost real menu/dialog; tooltips and snackbars never own the D-pad. */
+export function findActionableOverlay(): HTMLElement | null {
+    const overlays = Array.from(
+        document.querySelectorAll<HTMLElement>('.cdk-overlay-pane')
+    );
+    return (
+        overlays
+            .reverse()
+            .find(
+                (overlay) =>
+                    !isTransientFeedbackOverlay(overlay) &&
+                    overlayHasActionableContent(overlay)
+            ) ?? null
+    );
+}
+
+export function focusFirstActionableOverlay(
+    applyFocus: (element: HTMLElement) => void
+): boolean {
+    const overlay = findActionableOverlay();
+    if (!overlay) return false;
+
+    const target =
+        collectCandidates(overlay)[0]?.target ??
+        overlay.querySelector<HTMLElement>(
+            'button:not([disabled]), a[href], input:not([disabled]),' +
+                ' [role="option"], [role="menuitem"], [role="slider"]'
+        );
+    if (target) applyFocus(target);
+    return true;
+}
+
 /**
  * A mat-select, native select, ARIA slider, or a Material overlay with real
  * managed items owns its arrow/Enter key handling. A bare role=menu wrapper is
@@ -46,7 +107,7 @@ export function isNativeControlOpen(active: Element | null): boolean {
 
     // This app's CDK pane can be a direct child of its trigger rather than a
     // descendant of a global overlay container.
-    const overlay = document.querySelector('.cdk-overlay-pane');
+    const overlay = findActionableOverlay();
     return overlay !== null && overlayHasNativeKeyboardHandling(overlay);
 }
 
@@ -55,7 +116,7 @@ export function isNativeControlOpen(active: Element | null): boolean {
  * Spatial search is scoped to this pane so background controls stay excluded.
  */
 export function findUnmanagedOverlay(): HTMLElement | null {
-    const overlay = document.querySelector<HTMLElement>('.cdk-overlay-pane');
+    const overlay = findActionableOverlay();
     if (!overlay || overlayHasNativeKeyboardHandling(overlay)) {
         return null;
     }

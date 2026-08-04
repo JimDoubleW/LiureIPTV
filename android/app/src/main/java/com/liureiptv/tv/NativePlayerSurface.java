@@ -76,10 +76,6 @@ final class NativePlayerSurface {
         // punch-through needs — the surface sits behind the window and shows
         // through the WebView's transparent pixels. See the class doc.
         surfaceView = new SurfaceView(bridge.getContext());
-        // The plugin may center a narrower/taller video rectangle inside the
-        // host; fill the resulting letterbox/pillarbox area with black.
-        surfaceView.setBackgroundColor(Color.BLACK);
-
         parent.addView(surfaceView, 0, toLayoutParams(bounds));
         webView.setBackgroundColor(Color.TRANSPARENT);
 

@@ -80,6 +80,23 @@ describe('GridListComponent', () => {
         );
     });
 
+    it('marks catalog cards with a stable Android TV focus key', () => {
+        fixture.componentRef.setInput('items', [
+            { id: 42, title: 'Movie' },
+        ]);
+        fixture.componentRef.setInput('type', 'vod');
+
+        fixture.detectChanges();
+
+        const card = fixture.debugElement.query(By.css('mat-card'));
+        expect(card.nativeElement.hasAttribute('data-tv-content-card')).toBe(
+            true
+        );
+        expect(card.nativeElement.getAttribute('data-tv-focus-key')).toBe(
+            'content-vod-42'
+        );
+    });
+
     it.each(['live', 'vod', 'series'] as const)(
         'does not render a redundant %s type badge in homogeneous grids',
         (type) => {

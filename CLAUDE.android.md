@@ -976,18 +976,57 @@ states and per-panel position memory are the same mechanism, not two features.
 The current navigation contract deliberately uses **OK/BACK for panel
 transitions**; LEFT/RIGHT are local to the panel that already owns focus:
 
-1. OK on a Live Category confirms it, folds the category column and focuses the
-   first channel. Merely moving over categories does not reload them.
-2. OK on a channel starts playback and folds the Channels sidebar. BACK
-   restores Channels and returns focus to the previously selected row.
-3. Another BACK from Channels restores Live Categories. BACK from Live
-   Categories returns to the tray.
-4. In fullscreen, LEFT/RIGHT stay inside the player and BACK leaves fullscreen
-   before any panel is restored.
+Spatial navigation is contained within the current live-TV panel in all four
+directions. It cannot jump from the video/EPG panel to the header, Channels or
+Live Categories; those transitions are semantic `OK`/`BACK` actions.
+When no element owns focus at startup, the active route in the vertical tray
+is focused first. BACK from the workspace header is an explicit recovery to
+that same tray item, so the horizontal header cannot trap the remote.
+While Channels owns focus, every UP/DOWN zap transfers focus and memory to the
+new row before playback selection. If CDK virtual scrolling recycles that row,
+the active rendered channel is recovered before the startup tray fallback is
+allowed to run.
+EPG list rows expose their stable programme key to the TV navigation layer.
+UP/DOWN is handled as an explicit previous/next row operation instead of a
+geometric search. At the first and last row the key is still consumed, which
+keeps focus in the EPG rather than allowing a fallback to Live TV in the tray.
+The last focused programme and visible index are recovered after an EPG refresh;
+the active or nearest visible row is used only when that programme disappeared.
+An empty list retains EPG focus ownership during its short asynchronous retry
+window instead of falling back to Live TV in the tray.
+
+1. OK on a tray section enters its workspace panel and focuses the first
+   category. OK on a Live/VOD/Series/Downloads category confirms it, folds the
+   category column and focuses the first channel or content card in `<main>`.
+   Merely moving over categories does not reload them. When a content card is
+   removed, replaced, or disabled after OK or an asynchronous refresh, the
+   navigation layer restores a remaining content target rather than
+   bootstrapping from the tray. This generic recovery also covers controls in
+   Movies, Series, Downloads, and Settings. Focus temporarily owned by a dialog
+   or other overlay does not replace the remembered content owner. If the
+   selected category renders no content target, the category panel is reopened
+   and the confirmed category regains focus.
+2. OK on a live channel starts inline playback and folds the Channels sidebar;
+   once Angular has rendered the tuned channel, focus transfers from the now
+   inert channel row to the current EPG programme (or player controls when no
+   EPG exists). OK with focus on the player enters fullscreen. BACK restores
+   Channels and returns focus to the previously selected row.
+3. With Channels expanded, UP tunes the previous channel and DOWN the next
+   while the list
+   stays visible. Another BACK from Channels restores Live Categories. BACK
+   from Live Categories returns to the tray.
+4. In fullscreen, UP/DOWN zap to the previous/next channel, LEFT/RIGHT stay
+   inside the player, and BACK leaves fullscreen before any panel is restored.
 5. In the tray, one BACK is consumed; a second consecutive BACK within 650 ms
    calls the native player's id-independent `stop()`, waits for ExoPlayer to be
    muted/stopped/released, then calls Capacitor `App.exitApp()`. Any intervening
    remote key cancels the double-BACK sequence.
+6. Settings is an explicit hierarchy even though its context panel is never
+   part of category collapse: OK on a `.settings-section-item` focuses the first
+   usable control in the matching settings section. BACK returns to the
+   remembered section row; a further BACK returns to the active Settings tray
+   item. Async control replacement/removal uses the same content recovery as
+   catalog cards.
 
 The EPG list row is itself the primary focus target. RIGHT enters its
 `data-tv-row-action` controls (Watch, then programme information), LEFT walks
@@ -1051,11 +1090,14 @@ Use the repository script for normal development:
 
 ```bash
 ./tools/android/build-android.sh -b
+./tools/android/build-android.sh -c -b
 ./tools/android/build-android.sh -b -i -l -a <box>:5555
 ./tools/android/build-android.sh -s -a <box>:5555
 ```
 
-`-b/--build` is the only option that builds: it runs
+`-c/--clean` removes generated Android/web build outputs; combine it with
+`-b/--build` for a clean rebuild. `-b/--build` is the only option that builds:
+it runs
 `pnpm nx build web --configuration=pwa`, cleans the copied web assets, runs
 `pnpm exec cap sync android`, then assembles the debug APK. Without `-b`, the
 ADB-only options use the existing APK or installation: `-i/--install`,
@@ -1206,6 +1248,11 @@ live host, and the VOD/series host (`PortalInlinePlayerComponent`) simply never
 got a copy — so movies silently kept using the WebView this whole feature
 exists to avoid. An explicit `playerOverride` from a host still wins, which is
 what keeps DASH on Shaka.
+
+There is no Android recordings route, recordings library, or recordings-list
+screen yet. Recording remains an unsupported Android player capability; the
+existing recording control and recording-folder workflow belong to desktop
+Embedded MPV only.
 
 - **On-demand playback goes straight to a locked fullscreen.** Live plays
   inline beside its channel list, whose panels carry their own backgrounds.
@@ -1461,6 +1508,88 @@ restore toggle and returns focus to the remembered channel. LEFT/RIGHT never
 cross tray/category/channel boundaries, so invisible collapsed panels cannot
 capture geometric focus. BACK is the only parent transition and restores one
 level at a time.
+
+Confirming a category hands focus to the first row **currently rendered**, which
+still belongs to the previous category — the confirmed one's channels have not
+arrived yet. Traced on the reference Mi Box with `focusin`/`focusout` listeners:
+focus reached `|FR| TF1 FHD` at 380 ms and that row was destroyed at 478 ms when
+the new list rendered, leaving DOM focus on `<body>`. Every recovery path in the
+engine is driven by a key press, so the remote was simply dead until the viewer
+pressed something, and that press then bootstrapped from wherever recovery
+landed instead of the list they had just opened. `guardFocusSurvival`
+(`tv-playback-focus.ts`) watches the element it just focused for ~1.8 s and
+re-owns the remote if it is destroyed while nothing else has taken over. It
+tries live panel recovery first, then the generic workspace owner: on a cold
+start the live route renders the "All items" card grid rather than the channel
+sidebar, so the destroyed element is a `mat-card` and `recoverLastPanelFocus`
+does not apply — that case is what left the remote dead in the very first
+measurement. `recoverChannelFocus` also falls back to the first rendered row,
+because after a swap there is no active row and the remembered one is gone;
+without it recovery consumed the key and still left no owner.
+
+An activation handoff (`focusAfterContentActivation`) deliberately waits for the
+outgoing view, so the guard must not race it. Ownership is tracked with a
+counter incremented once per handoff chain and released exactly where the chain
+ends — a time window was tried first and leaked across unrelated transitions.
+
+Verified on the reference Mi Box after the fix: the grid card is destroyed at
+520 ms and focus is back on a real channel row at 983 ms with no key press,
+and a category-to-category swap recovers in 138 ms.
+
+When no EPG row exists yet, the recovered target — and the one
+`focusPlaybackAfterChannelCollapse`/`findPlaybackTarget` in
+`tv-playback-focus.ts` hand focus to the instant playback starts, live or
+VOD — is the fullscreen toggle
+(`app-player-controls button[data-tv-fullscreen-toggle]`), never "whichever
+player button happens to be first and enabled". Play/pause is disabled while
+the stream loads (`canTogglePlay()`), so that generic fallback used to land on
+volume; `canFullscreen()` only requires the player element to exist, so the
+toggle is reliably focusable the moment the player mounts, and it is the exact
+control `activate()` already treats OK-anywhere-inside-the-player as pressing
+before fullscreen. Verified on the reference box: OK on a tuned channel lands
+on the fullscreen button, and OK again enters fullscreen.
+
+UP at the first EPG row now returns to the video instead of being consumed
+(`focusFromEpgBoundary` in `tv-playback-focus.ts`, wired from
+`TvPanelNavigation.moveWithinEpgRow`), landing on the same fullscreen toggle.
+DOWN at the last row stays consumed — asymmetric on purpose, since nothing
+below the guide belongs to this screen, unlike the video sitting right above
+it. The transport bar is `opacity: 0` by design a few seconds after focus
+leaves it (its own fade-out), which is the common state by the time a viewer
+has scrolled to the top of the guide; `isAvailableTvFocusTarget` gained an
+`allowFaded` parameter so this one caller can focus into that fade rather than
+treating it as nothing to focus — the bar's own `focusin` handler is what
+reveals it once focus lands. Every other caller keeps the strict, faded-excluded
+check. Verified on the reference box: focusing the first EPG row's programme
+directly and dispatching `up` moves focus to the fullscreen button in one
+step, confirmed with the bar already faded.
+
+`handleChannelListDirection` swallowed every UP/DOWN press whenever no row in
+the currently rendered list was `.active` — a freshly opened category, or one
+that doesn't contain the channel actually playing (e.g. after visiting another
+tray section and coming back) — because `adjacentChannel()` returns null both
+for that case and for a genuine list-boundary zap, and the caller could not
+tell them apart. The remote appeared stuck on whatever row focus first landed
+on. Fixed by checking for an `.active` row before deciding to zap at all:
+falls through to ordinary geometric movement when there is none, keeps the
+existing "stay put at the ends" behaviour once a real zap sequence is active.
+Verified on the reference box both ways: DOWN advances row by row through a
+never-tuned category, and zapping a tuned channel still updates focus and the
+active row together.
+
+Those guards only hold if they are applied to the element actually focused, not
+merely to the geometric candidate. Entering another zone replaces the target
+with that zone's remembered selection (`focus-zones.ts`), which happens *after*
+the guards ran, so `recallPanelSelection` in `panel-region.ts` re-checks the
+remembered element and refuses `document.body` outright. The body fallback is
+not a panel: `resolveZone` lands there for anything with no landmark ancestor
+and no scroll container of its own, which on the live screen is the player
+control bar, the channel list's header buttons and the workspace header
+sharing one slot — recalling from it sent focus back into Channels from inside
+the player. This is invisible to jsdom, where nothing scrolls and every one of
+those elements resolves to the body zone anyway, so the regression test in
+`tv-navigation.spec.ts` tags an explicit `data-tv-zone` to reproduce the
+device's zone split.
 
 ## EPG
 

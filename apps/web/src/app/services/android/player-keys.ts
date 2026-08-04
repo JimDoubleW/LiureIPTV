@@ -7,10 +7,10 @@ import type { TvDirection } from './spatial-geometry';
 /**
  * The playback side of the reference-player key contract.
  *
- * The Android TV OK gesture tunes a channel and the navigation layer folds its
- * list; a second OK on the player can then commit to fullscreen. UP/DOWN over
- * fullscreen video zap to the next and
- * previous channel with no surface open at all, and LEFT reveals the channel
+ * The Android TV OK gesture tunes a live channel and folds its list while
+ * keeping playback inline beside the EPG. OK with focus on the player is the
+ * explicit fullscreen gesture. UP/DOWN over fullscreen video zap to the previous and
+ * next channel with no surface open at all, and LEFT reveals the channel
  * list (here: leaves fullscreen, which is the closest structural equivalent).
  * See docs/android-port/tv-navigation-reference.md.
  *
@@ -35,6 +35,7 @@ export { TV_FULLSCREEN_ATTRIBUTE, TV_FULLSCREEN_LOCKED_ATTRIBUTE };
 const PLAYER_VIEW_SELECTOR = 'app-web-player-view';
 const CHANNEL_ROW_SELECTOR = '.channel-list-item';
 const ACTIVE_ROW_CLASS = 'active';
+const ACTIVE_CHANNEL_ROW_SELECTOR = `${CHANNEL_ROW_SELECTOR}.${ACTIVE_ROW_CLASS}`;
 const CATCHUP_TARGET_SELECTOR = '[data-tv-catchup-target]';
 const CATCHUP_PLAYER_SELECTOR =
     `${PLAYER_VIEW_SELECTOR}[data-tv-catchup-playing]`;
@@ -237,17 +238,27 @@ export function exitFullscreen(): boolean {
 }
 
 /**
- * Zap over fullscreen video: UP is the next channel, DOWN the previous — the
- * convention the user confirmed against the benchmark. The list orders
- * channels by ascending number, so "next" is the row below the active one.
+ * Zap over fullscreen video: UP is the previous channel, DOWN the next — the
+ * remote's natural direction. The list orders channels by ascending number,
+ * so "next" is the row below the active one.
  *
  * Works on the rows already rendered behind the fullscreen element. When the
  * active row is not among them (virtual scrolling dropped it), the press does
  * nothing rather than jumping somewhere arbitrary.
  */
 export function zapAdjacent(direction: TvDirection): boolean {
-    if (direction !== 'up' && direction !== 'down') {
+    const target = adjacentChannel(direction);
+    if (!target) {
         return false;
+    }
+
+    target.click();
+    return true;
+}
+
+function adjacentChannel(direction: TvDirection): HTMLElement | null {
+    if (direction !== 'up' && direction !== 'down') {
+        return null;
     }
 
     const rows = Array.from(
@@ -257,15 +268,57 @@ export function zapAdjacent(direction: TvDirection): boolean {
         row.classList.contains(ACTIVE_ROW_CLASS)
     );
     if (activeIndex < 0) {
-        return false;
+        return null;
     }
 
-    const target = rows[activeIndex + (direction === 'up' ? 1 : -1)];
+    const target = rows[activeIndex + (direction === 'up' ? -1 : 1)];
     if (!target) {
+        return null;
+    }
+    return target;
+}
+
+/**
+ * Let UP/DOWN zap while the expanded channel list owns focus. The same
+ * channel click contract is used as in fullscreen; the panel remains open so
+ * the viewer can see the newly tuned row and press OK when ready to enlarge
+ * the picture.
+ */
+export function handleChannelListDirection(
+    direction: TvDirection,
+    focused: Element | null,
+    focusTarget?: (target: HTMLElement) => void
+): boolean {
+    if (
+        isTvFullscreen() ||
+        (direction !== 'up' && direction !== 'down') ||
+        !focused?.closest(CHANNEL_ROW_SELECTOR)
+    ) {
         return false;
     }
 
-    target.click();
+    // Nothing to zap from: a freshly opened category, or one that doesn't
+    // contain the channel actually playing, has no `.active` row at all.
+    // `adjacentChannel` and a real list boundary both return null the same
+    // way, so without this check every press below was swallowed here and the
+    // remote could never move off wherever focus first landed — regardless of
+    // reason. Falling through lets ordinary geometric movement walk the rows.
+    if (!document.querySelector(ACTIVE_CHANNEL_ROW_SELECTOR)) {
+        return false;
+    }
+
+    const target = adjacentChannel(direction);
+    if (target) {
+        // Move focus before the click can trigger Angular change detection and
+        // recycle the old virtual-scroll row. The navigation layer also
+        // remembers this node so it can recover the newly rendered active row
+        // if the focused instance is replaced immediately afterwards.
+        focusTarget?.(target);
+        target.click();
+    }
+    // Keep the D-pad in the channel-list zap mode at the ends too; falling
+    // through to geometric focus movement would make UP/DOWN appear to change
+    // selection without tuning a channel.
     return true;
 }
 

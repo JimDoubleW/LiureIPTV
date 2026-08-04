@@ -78,7 +78,10 @@
         />
     </div>
 }
-<div class="content-container">
+<div
+    class="content-container"
+    [attr.data-tv-resume-category-id]="resumeCategoryId"
+>
     @if (isSidebarCollapsed()) {
         <button
             mat-icon-button

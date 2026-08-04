@@ -165,6 +165,8 @@
                         <div
                             class="downloads__item"
                             data-tv-action-card
+                            data-tv-content-card
+                            [attr.data-tv-focus-key]="'download-' + item.id"
                             [class]="getStatusColor(item.status)"
                             [class.downloads__item--clickable]="
                                 isItemNavigable(item)

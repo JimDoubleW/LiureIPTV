@@ -10,8 +10,9 @@ import {
     collapseContext,
     isContextCollapsed,
     isContextCategoryItem,
-    isRegionCrossingAllowed,
+    isPanelTransitionAllowed,
     noteContextFocus,
+    recallPanelSelection,
     resolveRegion,
 } from './panel-region';
 import {
@@ -24,8 +25,8 @@ import {
     enterFullscreen,
     exitFullscreen,
     handleFullscreenDirection,
+    handleChannelListDirection,
     handleCatchupProgrammeOk,
-    isActiveChannelRow,
     isInsidePlayer,
     focusPlayerControls,
     isTvFullscreen,
@@ -39,10 +40,18 @@ import * as tvRange from './tv-range-control';
 import { handleTrayBack, resetTrayBackSequence } from './tv-app-exit';
 import {
     dispatchRealKey,
+    findActionableOverlay,
     findUnmanagedOverlay,
+    focusFirstActionableOverlay,
     isNativeControlOpen,
 } from './tv-native-control-keys';
 import { TvPanelNavigation } from './tv-panel-navigation';
+import {
+    findContentActivationOrigin,
+    focusAfterContentActivation,
+    guardFocusSurvival,
+} from './tv-playback-focus';
+import { TvWorkspaceFocus } from './tv-workspace-focus';
 
 /**
  * D-pad navigation for the Android TV port.
@@ -125,9 +134,18 @@ function applyFocus(element: HTMLElement): void {
     memory.remember(element);
     noteContextFocus(element);
     applyRegion(element);
+    panels.noteFocus(element);
+    workspaceFocus.note(element);
+    // Live panels answer first because their virtual lists need semantic keys;
+    // grids, detail pages and Settings fall to the generic workspace owner.
+    guardFocusSurvival(element, currentElement, () => {
+        if (panels.recoverLastPanelFocus()) return;
+        workspaceFocus.recover();
+    });
 }
 
 const panels = new TvPanelNavigation(applyFocus, memory);
+const workspaceFocus = new TvWorkspaceFocus(applyFocus);
 
 function move(direction: TvDirection): boolean {
     // Fullscreen video owns the D-pad outright: UP/DOWN zap, LEFT/RIGHT are
@@ -138,7 +156,19 @@ function move(direction: TvDirection): boolean {
 
     const origin = currentElement();
     if (!origin) {
-        return panels.focusFirstCandidate();
+        if (focusFirstActionableOverlay(applyFocus)) return true;
+        if (panels.recoverLastPanelFocus()) return true;
+        return workspaceFocus.recover() || panels.focusInitialTarget();
+    }
+
+    if (
+        !panels.isChannelListCollapsed() &&
+        handleChannelListDirection(direction, origin, (target) => {
+            panels.rememberChannel(target);
+            applyFocus(target);
+        })
+    ) {
+        return true;
     }
 
     if (panels.moveWithinActionCard(origin, direction)) {
@@ -158,13 +188,14 @@ function move(direction: TvDirection): boolean {
     const searchRoot: ParentNode = overlay ?? document;
 
     const originRegion = resolveRegion(origin);
-    const candidates = collectCandidates(searchRoot).filter(
-        (candidate) =>
-            candidate.target !== origin &&
-            isRegionCrossingAllowed(origin, candidate.target, direction) &&
-            (direction === 'up' ||
-                direction === 'down' ||
-                resolveRegion(candidate.target) === originRegion)
+    const reachable = (candidate: HTMLElement): boolean =>
+        candidate !== origin &&
+        isPanelTransitionAllowed(origin, candidate, direction) &&
+        (direction === 'up' ||
+            direction === 'down' ||
+            resolveRegion(candidate) === originRegion);
+    const candidates = collectCandidates(searchRoot).filter((candidate) =>
+        reachable(candidate.target)
     );
     const target = findBestCandidate(
         origin.getBoundingClientRect(),
@@ -181,13 +212,8 @@ function move(direction: TvDirection): boolean {
         if (scrollToReveal(origin, direction)) {
             const revealed = findBestCandidate(
                 origin.getBoundingClientRect(),
-                collectCandidates(searchRoot).filter(
-                    (c) =>
-                        c.target !== origin &&
-                        isRegionCrossingAllowed(origin, c.target, direction) &&
-                        (direction === 'up' ||
-                            direction === 'down' ||
-                            resolveRegion(c.target) === originRegion)
+                collectCandidates(searchRoot).filter((c) =>
+                    reachable(c.target)
                 ),
                 direction
             );
@@ -209,7 +235,8 @@ function move(direction: TvDirection): boolean {
     const destination =
         targetZone === resolveZone(origin)
             ? target
-            : (memory.recall(targetZone) ?? target);
+            : (recallPanelSelection(memory, origin, targetZone, direction) ??
+              target);
 
     applyFocus(destination);
     return true;
@@ -255,7 +282,11 @@ function activate(): boolean {
         noteContextFocus(active);
         active.click();
         collapseContext();
-        panels.focusFirstChannelAfterCategorySelection(active, currentElement);
+        panels.focusFirstContentAfterCategorySelection(active, currentElement);
+        return true;
+    }
+
+    if (workspaceFocus.activateSettingsSection(active)) {
         return true;
     }
 
@@ -264,16 +295,16 @@ function activate(): boolean {
     const channelRow = active.closest<HTMLElement>('.channel-list-item');
     const selectingChannel = channelRow !== null;
 
-    // OK on the already-active channel or on the player commits to fullscreen.
-    // A first OK on an idle channel falls through to its click handler below,
-    // starts playback and folds the channel list.
+    // OK on the player itself commits to fullscreen. A channel row — including
+    // the already-active row — falls through to its click handler below so a
+    // single OK starts inline playback and folds the Channels panel.
     //
     // Only before fullscreen. `enterFullscreen()` reports success for an
     // already-fullscreen player, so leaving this reachable swallowed every OK
     // aimed at a transport control — they all sit inside the player view.
     if (
         !isTvFullscreen() &&
-        (isActiveChannelRow(active) || isInsidePlayer(active))
+        isInsidePlayer(active)
     ) {
         if (enterFullscreen()) {
             return true;
@@ -283,15 +314,29 @@ function activate(): boolean {
     if (selectingChannel) {
         panels.rememberChannel(channelRow);
     }
+    const contentOrigin = findContentActivationOrigin(
+        active,
+        isInsidePlayer(active)
+    );
+    const selectedTrayItem = active.closest('aside.app-rail') !== null;
+    // Read before the click, which is what starts the route transition.
+    const trayLink = selectedTrayItem ? active : null;
     active.click();
+    if (trayLink) {
+        panels.focusFirstContextAfterTraySelection(trayLink);
+    }
     if (selectingChannel) {
         panels.collapseChannelList();
-        // Native player controls may only exist after the stream component has
-        // rendered. Give them focus when available so the hidden list never
-        // remains the apparent owner of the remote.
-        if (!focusPlayerControls()) {
-            window.setTimeout(() => focusPlayerControls(), 100);
-        }
+        // Keep the first OK inline so the EPG remains visible. A later OK with
+        // focus on the player is the explicit fullscreen gesture. The channel
+        // row remains the remembered focus target for BACK reopening.
+    }
+    if (contentOrigin && !selectingChannel && !selectedTrayItem) {
+        focusAfterContentActivation(
+            contentOrigin,
+            applyFocus,
+            () => workspaceFocus.recover()
+        );
     }
     return true;
 }
@@ -382,23 +427,45 @@ const NATIVE_KEYS: Readonly<Record<string, TvDirection | 'ok' | 'back'>> = {
  *    app from any list.
  */
 function goBack(): void {
-    // Slider adjustment and fullscreen both consume BACK before route history.
-    if (tvRange.releaseFocus(currentElement()) || exitFullscreen()) return;
+    // Slider adjustment consumes BACK before route history. Leaving fullscreen
+    // and revealing the collapsed channel list are one gesture in the live TV
+    // layout: the user pressed BACK specifically to get the list back.
+    if (tvRange.releaseFocus(currentElement())) return;
+    const leftFullscreen = exitFullscreen();
+    if (
+        leftFullscreen &&
+        panels.isChannelListCollapsed() &&
+        panels.reopenChannelList()
+    ) {
+        return;
+    }
+    if (leftFullscreen) return;
 
     // Same lesson as isNativeControlOpen: this app's overlays are not
     // appended under a global `.cdk-overlay-container`, so requiring that
     // ancestor silently never matched — BACK could not close a `mat-select`
     // or menu at all, falling straight through to the history/minimize
     // branches below instead.
-    if (document.querySelector('.cdk-overlay-pane')) {
+    if (findActionableOverlay()) {
         dispatchRealKey('Escape', document.body);
         return;
     }
 
     // BACK from the player first restores the channel list. A further BACK
-    // reopens the category column. The first BACK from fullscreen has already
-    // been consumed by exitFullscreen().
+    // reopens the category column.
     const active = currentElement();
+    // The header is not part of the OK/BACK live-panel hierarchy. If focus
+    // reaches it through a restored browser state or an overlay closing, BACK
+    // always recovers to the active item in the vertical tray.
+    if (
+        active?.closest('app-workspace-shell-header') &&
+        panels.focusTray()
+    ) {
+        return;
+    }
+    if (workspaceFocus.reopenSettingsPanel(active)) {
+        return;
+    }
     // Once a channel has been tuned, BACK first restores only its channel
     // list. The category column remains a separate BACK step.
     if (panels.isChannelListCollapsed() && panels.reopenChannelList()) {

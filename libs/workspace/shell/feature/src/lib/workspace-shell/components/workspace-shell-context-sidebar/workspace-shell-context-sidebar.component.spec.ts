@@ -1,8 +1,4 @@
-import {
-    Component,
-    Directive,
-    input,
-} from '@angular/core';
+import { Component, Directive, input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LiveLayoutSidebarStateService } from '@iptvnator/portal/shared/util';
 import { WorkspaceShellContextSidebarComponent } from './workspace-shell-context-sidebar.component';
@@ -72,7 +68,9 @@ describe('WorkspaceShellContextSidebarComponent', () => {
             })
             .compileComponents();
 
-        fixture = TestBed.createComponent(WorkspaceShellContextSidebarComponent);
+        fixture = TestBed.createComponent(
+            WorkspaceShellContextSidebarComponent
+        );
         liveSidebarService = TestBed.inject(LiveLayoutSidebarStateService);
         liveSidebarService.setState('expanded');
     });
@@ -167,6 +165,20 @@ describe('WorkspaceShellContextSidebarComponent', () => {
         });
 
         it('keeps the categories rail expanded when the service is expanded', () => {
+            setupLiveCategory('live');
+
+            const aside = fixture.nativeElement.querySelector(
+                'aside.context-panel--route'
+            );
+            expect(aside.classList.contains('context-panel--collapsed')).toBe(
+                false
+            );
+        });
+
+        it('expands again when entering Live after another route collapsed it', () => {
+            setupLiveCategory('vod');
+            liveSidebarService.setState('collapsed');
+
             setupLiveCategory('live');
 
             const aside = fixture.nativeElement.querySelector(

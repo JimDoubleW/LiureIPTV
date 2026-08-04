@@ -106,6 +106,104 @@ describe('native key dispatch and an unmanaged (role-less) overlay menu', () => 
         expect(document.activeElement).toBe(addPlaylist);
     });
 
+    it('ignores a tooltip above an actionable menu and enters the menu', () => {
+        document.body.innerHTML = `
+            <button id="trigger" aria-haspopup="menu" aria-expanded="true">
+                Open menu
+            </button>
+            <button id="background">Background action</button>
+            <div class="cdk-overlay-pane">
+                <div role="menu" class="mat-mdc-menu-panel">
+                    <button id="menuAction">Menu action</button>
+                </div>
+            </div>
+            <div class="cdk-overlay-pane">
+                <div role="tooltip" class="mat-mdc-tooltip">Tooltip</div>
+            </div>
+        `;
+        const trigger = withRect(
+            document.getElementById('trigger') as HTMLElement,
+            { top: 0, bottom: 20, left: 0, right: 200 }
+        );
+        withRect(document.getElementById('background') as HTMLElement, {
+            top: 30,
+            bottom: 50,
+            left: 0,
+            right: 200,
+        });
+        const menuAction = withRect(
+            document.getElementById('menuAction') as HTMLElement,
+            { top: 60, bottom: 80, left: 0, right: 200 }
+        );
+        trigger.focus();
+
+        dispatch('down');
+
+        expect(document.activeElement).toBe(menuAction);
+    });
+
+    it('does not let a snackbar intercept normal background navigation', () => {
+        document.body.innerHTML = `
+            <button id="first">First background action</button>
+            <button id="second">Second background action</button>
+            <div class="cdk-overlay-pane">
+                <div class="mat-mdc-snack-bar-container" role="status">
+                    Saved
+                </div>
+            </div>
+        `;
+        const first = withRect(
+            document.getElementById('first') as HTMLElement,
+            { top: 0, bottom: 20, left: 0, right: 200 }
+        );
+        const second = withRect(
+            document.getElementById('second') as HTMLElement,
+            { top: 60, bottom: 80, left: 0, right: 200 }
+        );
+        first.focus();
+
+        dispatch('down');
+
+        expect(document.activeElement).toBe(second);
+    });
+
+    it('focuses the first dialog action before any workspace fallback', () => {
+        document.body.innerHTML = `
+            <nav>
+                <button id="tray">Live TV</button>
+            </nav>
+            <main>
+                <button id="workspace">Workspace action</button>
+            </main>
+            <div class="cdk-overlay-pane">
+                <div role="dialog">
+                    <button id="dialogAction">Confirm</button>
+                </div>
+            </div>
+        `;
+        withRect(document.getElementById('tray') as HTMLElement, {
+            top: 0,
+            bottom: 20,
+            left: 0,
+            right: 100,
+        });
+        withRect(document.getElementById('workspace') as HTMLElement, {
+            top: 40,
+            bottom: 60,
+            left: 0,
+            right: 100,
+        });
+        const dialogAction = withRect(
+            document.getElementById('dialogAction') as HTMLElement,
+            { top: 80, bottom: 100, left: 0, right: 100 }
+        );
+        (document.activeElement as HTMLElement | null)?.blur();
+
+        dispatch('down');
+
+        expect(document.activeElement).toBe(dialogAction);
+    });
+
     it('clicks the focused panel button on OK', () => {
         document.body.innerHTML = `
             <div class="cdk-overlay-pane">

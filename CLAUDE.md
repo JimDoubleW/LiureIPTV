@@ -1097,10 +1097,40 @@ and select/connect an ADB target without forcing a rebuild. Android development
 versions derive `versionCode` from the Git commit count and use
 `<package-version>-dev.<count>.<sha>` unless explicitly overridden.
 TV navigation is hierarchical: LEFT/RIGHT stay inside the current panel, OK
-confirms a category or channel, and BACK reveals Channels, then Live
-Categories, then the tray. OK on a channel starts playback and folds Channels;
+enters the selected tray section or confirms a category/channel, and BACK
+reveals Channels, then Live Categories, then the tray. OK on a live channel
+starts inline playback, folds Channels and transfers focus to the current EPG
+programme; OK with focus on the player enters fullscreen;
+spatial navigation never crosses between live-TV panels in any direction.
+The same category contract applies to Movies, Series and Downloads: category OK
+folds the category column and focuses the first real channel or content card in
+`<main>`. An empty category reopens and refocuses its category instead of
+leaving the remote without an owner. Generic content focus recovery covers
+asynchronous replacement, removal, or disabling of cards and controls in
+Movies, Series, Downloads, and Settings; transient overlays do not overwrite
+the remembered content owner. Settings uses OK to enter the selected section's
+controls and BACK to return to the section list, then the tray.
+Initial remote focus lands on the active vertical-tray route, and BACK from the
+workspace header recovers to that tray item.
+Channel zapping transfers focus to each new row and recovers the active row
+after virtual-scroll recycling before any fallback to the tray. Focus handed to
+a list that a pending load then replaces — confirming a category is the normal
+case — is recovered without waiting for a key press, so the remote is never
+left without an owner. The moment playback starts (live or VOD), before any
+EPG row exists to take priority, focus lands on the fullscreen toggle rather
+than an arbitrary enabled player button — play/pause is disabled while the
+stream loads, so a plain "first enabled button" search landed on volume.
+EPG UP/DOWN moves explicitly between programme rows; DOWN is consumed at the
+last row so focus cannot escape to the tray, while UP at the first row returns
+to the video's fullscreen toggle instead — the panel sits directly above the
+guide, and that toggle stays a valid target even faded, which it normally is
+by then. Rows also expose a stable programme key and recover the same, active,
+or nearest visible programme after guide rendering replaces the focused node.
 BACK restores it at the previous channel. A consecutive double BACK in the tray
-stops/releases ExoPlayer before closing the Android activity.
+stops/releases ExoPlayer before closing the Android activity. In fullscreen,
+UP/DOWN zap to the previous/next channel while LEFT/RIGHT remain in the player.
+With Channels expanded, UP/DOWN also tune previous/next channels without
+hiding the list; opening the list starts the current channel when needed.
 The native Android SurfaceView fits each stream inside its host using the
 reported video and pixel aspect ratio, centered with black letterbox/pillarbox
 space instead of stretching when the inline EPG reduces the player height.
@@ -1108,6 +1138,8 @@ Android downloads reuse the shared downloads UI through a partial bridge backed
 by the OS `DownloadManager` and WebView SQLite. Android's document-tree picker
 selects a persistent destination; TV firmware without a real picker gets a
 native choice of app storage or `Download/LiureIPTV` on each available volume.
+Android recording has no dedicated route or recordings-list screen yet; the
+Android native player still reports recording as unsupported.
 Completed staging files are exported there, and OK on a download reopens its
 source movie or series detail. Play Local on an Xtream movie detail uses the
 native Android player; teardown pauses and stops ExoPlayer before its

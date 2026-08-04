@@ -1,3 +1,5 @@
+import type { ZoneMemory } from './focus-zones';
+
 /**
  * Which region of the workspace currently holds focus.
  *
@@ -76,6 +78,111 @@ export function resolveRegion(element: Element): TvRegion {
  * which Settings does not use.
  */
 const CONTEXT_PANEL_SELECTOR = 'aside.context-panel:has(.category-item)';
+
+/**
+ * The Android TV live layout is made of four focus scopes. Spatial geometry
+ * must not jump between them: a header control can be very close to the top
+ * row of Channels or the video, but changing panels is an explicit OK/BACK
+ * action. The selectors are deliberately limited to the live shell so other
+ * Android pages keep their normal spatial navigation.
+ */
+const TV_PANEL_SELECTORS = {
+    rail: 'aside.app-rail',
+    header: 'app-workspace-shell-header',
+    categories: CONTEXT_PANEL_SELECTOR,
+    channels: '.sidebar',
+    playback: '.content-container',
+} as const;
+
+type TvPanelScope = keyof typeof TV_PANEL_SELECTORS;
+
+function resolveTvPanelScope(element: Element): TvPanelScope | null {
+    // The most specific scopes must win when a test fixture or a future shell
+    // nests landmarks differently.
+    if (element.closest(TV_PANEL_SELECTORS.channels)) return 'channels';
+    if (element.closest(TV_PANEL_SELECTORS.playback)) return 'playback';
+    if (element.closest(TV_PANEL_SELECTORS.categories)) return 'categories';
+    if (element.closest(TV_PANEL_SELECTORS.header)) return 'header';
+    if (element.closest(TV_PANEL_SELECTORS.rail)) return 'rail';
+    return null;
+}
+
+/**
+ * Prevent generic spatial navigation from crossing Android TV live panels.
+ * Internal movement inside a panel is still allowed in every direction;
+ * panel transitions are handled by the semantic OK/BACK hierarchy.
+ */
+export function isTvPanelCrossingAllowed(
+    origin: Element,
+    target: Element
+): boolean {
+    const originScope = resolveTvPanelScope(origin);
+    const targetScope = resolveTvPanelScope(target);
+    return (
+        originScope === null ||
+        targetScope === null ||
+        originScope === targetScope
+    );
+}
+
+/**
+ * Whether focus may move from `origin` to `target` at all.
+ *
+ * Both boundary rules in one place, because they have to be applied to every
+ * element the engine is about to focus — not only to the geometric candidate.
+ * A panel-memory recall that skips them re-opens the boundary from the other
+ * side: the destination is then chosen by what was focused last rather than by
+ * where the user pointed, and lands in a panel the direction never asked for.
+ */
+export function isPanelTransitionAllowed(
+    origin: Element,
+    target: Element,
+    direction: 'up' | 'down' | 'left' | 'right'
+): boolean {
+    return (
+        isRegionCrossingAllowed(origin, target, direction) &&
+        isTvPanelCrossingAllowed(origin, target)
+    );
+}
+
+/**
+ * The remembered selection of the panel geometry pointed at, or null when that
+ * memory must not be honoured.
+ *
+ * Two things can go wrong with a plain `memory.recall`, and both surface as
+ * focus landing in a panel the pressed direction never asked for.
+ *
+ * `document.body` is not a panel. `resolveZone` falls back to it for anything
+ * with no landmark ancestor and no scroll container of its own, which on the
+ * live screen is the player control bar, the channel list's header buttons and
+ * the workspace header all at once. Recalling from that one shared slot hands
+ * the remote to whichever of them was focused last, in whichever panel that
+ * happened to be.
+ *
+ * And a recall replaces the target *after* the crossing guards ran, so even a
+ * genuine per-panel memory can point across a boundary the geometric candidate
+ * was not allowed to cross. Re-checking the destination is what keeps OK/BACK
+ * the only way between live-TV panels.
+ */
+export function recallPanelSelection(
+    memory: ZoneMemory,
+    origin: Element,
+    zone: Element,
+    direction: 'up' | 'down' | 'left' | 'right'
+): HTMLElement | null {
+    if (zone === document.body) {
+        return null;
+    }
+
+    const remembered = memory.recall(zone);
+    if (!remembered) {
+        return null;
+    }
+
+    return isPanelTransitionAllowed(origin, remembered, direction)
+        ? remembered
+        : null;
+}
 
 export function getContextPanel(): HTMLElement | null {
     return document.querySelector<HTMLElement>(CONTEXT_PANEL_SELECTOR);
@@ -207,6 +314,11 @@ export function expandContext(): HTMLElement | null {
 
     document.documentElement.setAttribute(REGION_ATTRIBUTE, 'context');
     panel.removeAttribute('inert');
+    // The shared live-sidebar service can leave this class on the panel after
+    // a previous TV session. BACK/OK is an explicit UI transition, so remove
+    // the stale class immediately; the route-entry effect owns persistence for
+    // the next Live TV visit.
+    panel.classList.remove('context-panel--collapsed');
 
     // Force layout so the caller measures the expanded panel, not the old one.
     panel.getBoundingClientRect();
